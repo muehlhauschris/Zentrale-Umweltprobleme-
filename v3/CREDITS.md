@@ -6,7 +6,6 @@
 | Gebäude `building-*.glb` mit `Textures/colormap.png` | Kenney, github.com/KenneyNL/Starter-Kit-City-Builder | MIT (Repository), Modelle CC0 |
 | `low-poly-tree` | Sara Vieira, über github.com/pmndrs/market-assets | laut Sammlung frei nutzbar |
 | `wind-turbine` | creativetrio, über github.com/pmndrs/market-assets | laut Sammlung frei nutzbar |
-| `cactus` | Saltedsea, über github.com/pmndrs/market-assets | laut Sammlung frei nutzbar |
 | `Horse.glb`, `Flamingo.glb`, `Parrot.glb`, `Stork.glb` | Beispielmodelle aus github.com/mrdoob/three.js (ursprünglich mirada / ro.me) | mit three.js verteilt (MIT-Repository) |
 | `tex/earth.jpg`, `tex/clouds.png` | Erdtexturen aus den three.js-Beispielen (NASA-Bildmaterial) | mit three.js verteilt |
 | `tex/grass.jpg` | Grastextur aus den three.js-Beispielen (Quelle laut Readme: opengameart.org) | mit three.js verteilt |
