@@ -7,6 +7,7 @@
 | `low-poly-tree` | Sara Vieira, über github.com/pmndrs/market-assets | laut Sammlung frei nutzbar |
 | `wind-turbine` | creativetrio, über github.com/pmndrs/market-assets | laut Sammlung frei nutzbar |
 | `Horse.glb`, `Flamingo.glb`, `Parrot.glb`, `Stork.glb` | Beispielmodelle aus github.com/mrdoob/three.js (ursprünglich mirada / ro.me) | mit three.js verteilt (MIT-Repository) |
+| `Xbot.glb` (Figur „Dein Körper“) | Beispielmodell aus github.com/mrdoob/three.js (Mixamo-Figur) | mit three.js verteilt; vor breiter Veröffentlichung prüfen |
 | `tex/earth.jpg`, `tex/clouds.png` | Erdtexturen aus den three.js-Beispielen (NASA-Bildmaterial) | mit three.js verteilt |
 | `tex/grass.jpg` | Grastextur aus den three.js-Beispielen (Quelle laut Readme: opengameart.org) | mit three.js verteilt |
 | `lib/three.min.js`, `GLTFLoader.js`, `DRACOLoader.js`, `lib/draco/*` | three.js r128, Draco-Decoder (Google) | MIT bzw. Apache 2.0 |
