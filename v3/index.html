@@ -252,7 +252,7 @@ function mat(color, opacity, basic) {
   var key = color + '/' + (opacity === undefined ? 1 : opacity) + (basic ? 'b' : '');
   if (matCache[key]) return matCache[key];
   var p = { color: color };
-  if (opacity !== undefined && opacity < 1) { p.transparent = true; p.opacity = opacity; p.depthWrite = false; }
+  if (opacity !== undefined && opacity < 1) { p.transparent = true; p.opacity = opacity; p.depthWrite = false; if (opacity === 0) p.visible = false; }
   if (!basic) p.roughness = 0.85;
   return (matCache[key] = basic ? new THREE.MeshBasicMaterial(p) : new THREE.MeshStandardMaterial(p));
 }
@@ -571,11 +571,13 @@ function skyDome(sky) {
 function tree(x, z, kind, state, fruit, s) {
   var g = G(); g.position.set(x, 0, z); g.scale.setScalar(s || 1);
   var dead = state === 'dead', burnt = state === 'burnt', th = kind === 'almond' ? 1.4 : burnt ? 1.6 : 2.4;
-  var mn = kind === 'almond' || kind === 'conifer' ? 'tree-small' : kind === 'acacia' ? 'low-poly-tree' : (kind === 'rain' && hash(x * 3.3 + z) > 0.72) ? 'palm-long' : 'tree-big';
+  var mn = kind === 'almond' || kind === 'conifer' ? 'tree-small' : kind === 'acacia' ? 'tree-big' : (kind === 'rain' && hash(x * 3.3 + z) > 0.72) ? 'palm-long' : 'tree-big';
   if (!dead && !burnt && has(mn)) {
     var H = kind === 'almond' ? 3.4 : kind === 'rain' ? 7.5 : kind === 'acacia' ? 4.8 : kind === 'conifer' ? 5 : 5.8;
     put(g, mn, H, 0, 0, 0, hash(x + z * 2) * 6.28); shadow(g, 0, 0, H * 0.28);
-    for (var fk = 0; fk < (fruit || 0); fk++) { var fa = hash(x * 7 + z + fk) * 6.28; add(g, 'sph', 0xe63946, Math.cos(fa) * H * 0.2, H * (0.5 + hash(fk + x) * 0.25), Math.sin(fa) * H * 0.2, 0.22); }
+    if (fruit > 0) { var im = new THREE.InstancedMesh(GEO.sph, mat(0xe63946), fruit), dm = new THREE.Object3D();
+      for (var fk = 0; fk < fruit; fk++) { var fa = hash(x * 7 + z + fk) * 6.28; dm.position.set(Math.cos(fa) * H * 0.2, H * (0.5 + hash(fk + x) * 0.25), Math.sin(fa) * H * 0.2); dm.scale.setScalar(0.22); dm.updateMatrix(); im.setMatrixAt(fk, dm.matrix); }
+      g.add(im); }
     return g;
   }
   add(g, 'cyl', burnt ? 0x1a1512 : dead ? 0x8c7f70 : 0x6b4a2b, 0, th / 2, 0, 0.32, th, 0.32);
@@ -1217,7 +1219,7 @@ function frame() {
   renderer.render(scene, camera);
 }
 drawPlanet(); drawPanel(); updateNav(); onResize(); planet.rotation.set(tilt, spin, 0);
-window.__sim = { rig: rig, camera: camera, T_orbit: T_orbit, irs: irs, targets: targets, release: release, S: S, land: land, ascend: ascend, changed: changed, P_ground: P_ground, P_orbit: P_orbit, panel: panel, startHarvest: startHarvest, resetAll: resetAll, SITES: SITES };
+window.__sim = { renderer: renderer, rig: rig, camera: camera, T_orbit: T_orbit, irs: irs, targets: targets, release: release, S: S, land: land, ascend: ascend, changed: changed, P_ground: P_ground, P_orbit: P_orbit, panel: panel, startHarvest: startHarvest, resetAll: resetAll, SITES: SITES };
 renderer.setAnimationLoop(frame);
 };
 if (!window.THREE) { document.getElementById('err').hidden = false; document.getElementById('load').hidden = true; }
