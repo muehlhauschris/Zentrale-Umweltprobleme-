@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Die 9 planetaren Grenzen – Forschungsstation Erde (PuG)</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #050a18; overflow: hidden;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", Arial, sans-serif; color: #e8eefc; }
+  #c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  .card { position: fixed; background: rgba(10, 18, 40, .82); border: 1px solid #2a3b66; border-radius: 12px;
+    padding: 12px 14px; backdrop-filter: blur(6px); }
+  #info { top: 12px; left: 12px; max-width: 330px; font-size: 13px; line-height: 1.45; }
+  #info h1 { font-size: 16px; margin: 0 0 4px; }
+  #info p { margin: 4px 0 0; color: #b9c6e6; }
+  #info button { margin-top: 8px; }
+  #right { top: 12px; right: 12px; text-align: right; max-width: 260px; font-size: 12px; }
+  #nav { bottom: 12px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; flex-wrap: wrap;
+    justify-content: center; max-width: calc(100vw - 24px); }
+  button { font: inherit; font-size: 14px; color: #e8eefc; background: #1a2850; border: 1px solid #3a4f88;
+    border-radius: 8px; padding: 8px 12px; cursor: pointer; }
+  button:hover { background: #24376c; }
+  button.primary { background: #2ec4b6; border-color: #2ec4b6; color: #04121a; font-weight: 700; font-size: 16px; padding: 10px 16px; }
+  button.done { border-color: #7bd389; color: #b9f0c3; }
+  #vrnote { margin-top: 8px; color: #b9c6e6; line-height: 1.4; }
+  #progress { margin-top: 8px; color: #b9c6e6; }
+  #err { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 24px; text-align: center; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="info" class="card">
+  <h1>Forschungsstation Erde: die 9 planetaren Grenzen</h1>
+  <div id="help">
+    <p><b>Am Bildschirm:</b> Ziehen = umsehen · Klick auf Bodenmarke = hingehen · W A S D / Pfeiltasten = laufen · Klick auf Grün/Gelb/Rot = einschätzen.</p>
+    <p><b>Mit der Brille:</b> „VR starten“, dann mit dem Controller zeigen und Trigger drücken. Stick = laufen und drehen.</p>
+  </div>
+  <button id="toggleHelp">Hilfe ausblenden</button>
+</div>
+
+<div id="right" class="card">
+  <button id="vrbtn" class="primary" hidden>VR starten</button>
+  <div id="vrnote">VR wird geprüft …</div>
+  <div id="progress"></div>
+  <button id="resetbtn" style="margin-top:8px">Zurücksetzen</button>
+</div>
+
+<div id="nav" class="card"></div>
+
+<div id="err" hidden>Die 3D-Bibliothek konnte nicht geladen werden. Bitte Internetverbindung prüfen und die Seite neu laden.</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function () {
+'use strict';
+if (!window.THREE) { document.getElementById('err').hidden = false; return; }
+
+var FONT = 'system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", Arial, sans-serif';
+
+/* ------------------------------------------------------------------ Inhalte */
+var ZONES = ['Sicherer Bereich', 'Überschritten: steigendes Risiko', 'Überschritten: Hochrisikozone'];
+var ZSHORT = ['sicherer Bereich', 'steigendes Risiko', 'Hochrisikozone'];
+var ZBADGE = ['IM SICHEREN BEREICH', 'ÜBERSCHRITTEN · STEIGENDES RISIKO', 'ÜBERSCHRITTEN · HOCHRISIKOZONE'];
+var ZC = ['#7bd389', '#ffd166', '#ff5a5f'];
+var SRC = 'Quelle: Planetary Health Check, PIK Potsdam (Einstufung: 2026 · Messwerte: Ausgabe 2025)';
+var STATIONS = [
+  { title: 'Klimawandel', color: '#ff8c61', zone: 2,
+    q: 'Messgrößen: der CO₂-Gehalt der Luft und der Strahlungsantrieb (wie stark Treibhausgase die Erde aufheizen). In welcher Zone steht die Erde?',
+    big: '423 ppm CO₂',
+    explain: 'Die Grenze liegt bei 350 ppm. Der Strahlungsantrieb beträgt +2,97 W/m² – die Grenze liegt bei +1,0, die Hochrisiko-Linie bei +1,5.',
+    nuance: 'Beim CO₂ allein wäre die Hochrisiko-Linie (450 ppm) noch nicht erreicht. Den Ausschlag gibt die zweite Messgröße.',
+    task: 'Warum reicht es nicht, wenn nur ein einzelnes Land seine Emissionen senkt?',
+    viz: { type: 'bars', max: 3.2, line: { v: 1.5, text: 'Hochrisiko ab 1,5' }, items: [
+      { v: 1.0, text: '+1,0', label: ['Grenze', 'W/m²'], color: '#7bd389' },
+      { v: 2.97, text: '+2,97', label: ['heute', 'W/m²'], color: '#ff5a5f' } ] } },
+
+  { title: 'Biosphäre', color: '#7bd389', zone: 2,
+    q: 'Gemeint sind Vielfalt und Funktionsfähigkeit der belebten Natur: das Artensterben und der Anteil des Pflanzenwachstums, den der Mensch beansprucht. Welche Zone?',
+    big: '30 %',
+    explain: 'So viel der pflanzlichen Produktion an Land beansprucht der Mensch – die Grenze liegt bei 10 %. Die Aussterberate liegt über 100 statt höchstens 10 Arten pro Million Arten und Jahr.',
+    nuance: 'Klima und Biosphäre gelten als die beiden Kerngrenzen: Sie hängen mit allen anderen Grenzen eng zusammen.',
+    task: 'Naturschutz braucht Fläche. Wer soll entscheiden, wie viel Land der Natur bleibt?',
+    viz: { type: 'bars', max: 35, line: { v: 20, text: 'Hochrisiko ab 20 %' }, items: [
+      { v: 10, text: '10 %', label: ['Grenze'], color: '#7bd389' },
+      { v: 30, text: '30 %', label: ['heute'], color: '#ff5a5f' } ] } },
+
+  { title: 'Landnutzung', color: '#c9a66b', zone: 1,
+    q: 'Messgröße: Wie viel der ursprünglichen Waldfläche der Erde heute noch steht. In welcher Zone steht die Erde?',
+    big: '59 %',
+    explain: 'So viel der ursprünglichen Waldfläche ist noch vorhanden. Sicher wären mindestens 75 %; unter 54 % beginnt die Hochrisikozone.',
+    nuance: 'Hier ist ein niedriger Wert der schlechte: Der Balken „heute“ liegt unter der Grenze.',
+    task: 'Der Regenwald liegt in wenigen Staaten, nützt aber dem Weltklima. Dürfen andere Staaten mitreden?',
+    viz: { type: 'bars', max: 100, line: { v: 54, text: 'Hochrisiko unter 54 %' }, items: [
+      { v: 75, text: '75 %', label: ['Grenze', '(mindestens)'], color: '#7bd389' },
+      { v: 59, text: '59 %', label: ['heute'], color: '#ffd166' } ] } },
+
+  { title: 'Süßwasser', color: '#5aa2ff', zone: 1,
+    q: 'Messgröße: Auf welchem Teil der Landfläche Flüsse und Bodenfeuchte deutlich vom natürlichen Zustand abweichen. Welche Zone?',
+    big: '22,6 %',
+    explain: 'Auf 22,6 % der Landfläche sind die Abflüsse der Flüsse gestört (Grenze: 12,9 %). Bei der Bodenfeuchte sind es 22,0 % (Grenze: 12,4 %).',
+    nuance: 'Gemessen wird die Störung des Wasserkreislaufs – nicht, wie viele Menschen sauberes Trinkwasser haben.',
+    task: 'Flüsse fließen durch mehrere Staaten. Wem gehört das Wasser: dem Land an der Quelle oder allen Anliegern?',
+    viz: { type: 'bars', max: 55, line: { v: 50, text: 'Hochrisiko ab 50 %' }, items: [
+      { v: 12.9, text: '12,9 %', label: ['Grenze'], color: '#7bd389' },
+      { v: 22.6, text: '22,6 %', label: ['heute'], color: '#ffd166' } ] } },
+
+  { title: 'Stoffkreisläufe', color: '#f4a261', zone: 2,
+    q: 'Gemeint sind Stickstoff und Phosphor, die vor allem als Dünger in die Umwelt gelangen. In welcher Zone steht die Erde?',
+    big: '165 Mio. t',
+    explain: 'So viel Stickstoff bringt der Mensch pro Jahr gezielt in Umlauf – die Grenze liegt bei 62 Mio. t. Beim Phosphor sind es 18,2 statt 6,2 Mio. t.',
+    nuance: 'Dünger sichert die Ernährung von Milliarden Menschen. Die Grenze beschreibt ein Risiko für das Erdsystem, kein Verbot.',
+    task: 'Weniger Dünger oder sichere Ernten: Wie würdet ihr diesen Zielkonflikt politisch lösen?',
+    viz: { type: 'bars', max: 180, line: { v: 82, text: 'Hochrisiko ab 82' }, items: [
+      { v: 62, text: '62', label: ['Grenze', 'Mio. t N'], color: '#7bd389' },
+      { v: 165, text: '165', label: ['heute', 'Mio. t N'], color: '#ff5a5f' } ] } },
+
+  { title: 'Ozeanversauerung', color: '#4cc9f0', zone: 1,
+    q: 'Die Meere nehmen CO₂ auf und werden saurer. Messgröße: die Aragonit-Sättigung – daraus bauen Korallen und Muscheln ihre Schalen. Welche Zone?',
+    big: 'Ω 2,84',
+    explain: 'Der Wert ist unter die Grenze von 2,86 gefallen. 2025 wurde die Ozeanversauerung damit als siebte Grenze für überschritten erklärt.',
+    nuance: 'Auch hier ist ein niedriger Wert der schlechte. Die Grenze ist bisher nur knapp unterschritten.',
+    task: 'Die Hohe See gehört keinem Staat. Wer kann für ihren Schutz verantwortlich gemacht werden?',
+    viz: { type: 'bars', max: 3, line: { v: 2.75, text: 'Hochrisiko unter 2,75' }, items: [
+      { v: 2.86, text: '2,86', label: ['Grenze', '(mindestens)'], color: '#7bd389' },
+      { v: 2.84, text: '2,84', label: ['heute'], color: '#ffd166' } ] } },
+
+  { title: 'Neue Substanzen', color: '#c77dff', zone: 2,
+    q: 'Gemeint sind vom Menschen geschaffene Stoffe wie Kunststoffe, Pestizide oder Industriechemikalien. In welcher Zone steht die Erde?',
+    big: 'Grenze: 0 %',
+    explain: 'Sicher wäre, wenn kein Stoff ohne ausreichende Sicherheitsprüfung in die Umwelt gelangte. Das ist nicht der Fall – die Grenze gilt als weit überschritten.',
+    nuance: 'Für diese Grenze gibt es keinen einzelnen Messwert. Die Einstufung beruht auf einer Abschätzung, nicht auf einer Zahl.',
+    task: 'Sollten neue Stoffe erst zugelassen werden, wenn ihre Unbedenklichkeit belegt ist? Wer trägt die Beweislast?',
+    viz: { type: 'note', lines: ['Kein einzelner', 'Messwert verfügbar'] } },
+
+  { title: 'Aerosole', color: '#b8c4d9', zone: 0,
+    q: 'Aerosole sind Schwebteilchen in der Luft, etwa Ruß und Staub. Messgröße: der Unterschied der Lufttrübung zwischen Nord- und Südhalbkugel. Welche Zone?',
+    big: '0,063',
+    explain: 'Der Wert liegt unter der Grenze von 0,10 und hat sich im letzten Jahrzehnt verbessert.',
+    nuance: 'Der weltweite Mittelwert kann verdecken, dass die Belastung in einzelnen Regionen, etwa in Südasien, zu hoch ist.',
+    task: 'Global im grünen Bereich, regional nicht: Reicht ein weltweiter Durchschnitt als Maßstab für Politik?',
+    viz: { type: 'bars', max: 0.3, line: { v: 0.25, text: 'Hochrisiko ab 0,25' }, items: [
+      { v: 0.10, text: '0,10', label: ['Grenze'], color: '#ffd166' },
+      { v: 0.063, text: '0,063', label: ['heute'], color: '#7bd389' } ] } },
+
+  { title: 'Ozonschicht', color: '#2ec4b6', zone: 0,
+    q: 'Die Ozonschicht schützt vor UV-Strahlung. Messgröße: die Ozonmenge in der Stratosphäre in Dobson-Einheiten (DU). Welche Zone?',
+    big: '285,7 DU',
+    explain: 'Der Wert liegt über der Grenze von 277 DU. Mit dem Montrealer Protokoll (1987) wurden rund 99 % der verbotenen ozonschädlichen Stoffe abgeschafft.',
+    nuance: 'Hier ist ein hoher Wert der gute. Laut Bericht 2026 hat sich die Erholung zuletzt aber verlangsamt.',
+    task: 'Lässt sich der Erfolg von Montreal auf den Klimaschutz übertragen? Was spricht dafür, was dagegen?',
+    viz: { type: 'bars', max: 300, line: { v: 263, text: 'Hochrisiko unter 263' }, items: [
+      { v: 277, text: '277', label: ['Grenze', '(mindestens)'], color: '#ffd166' },
+      { v: 285.7, text: '285,7', label: ['heute', 'DU'], color: '#7bd389' } ] } }
+];
+var N = STATIONS.length;
+var state = STATIONS.map(function () { return { answer: -1, hover: -1, t0: 0 }; });
+
+/* ------------------------------------------------------------------ Grundgerüst */
+var canvas = document.getElementById('c');
+var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.xr.enabled = true;
+renderer.xr.setReferenceSpaceType('local-floor');
+var maxAniso = renderer.capabilities.getMaxAnisotropy();
+
+var scene = new THREE.Scene();
+scene.background = new THREE.Color(0x050a18);
+scene.fog = new THREE.Fog(0x050a18, 32, 80);
+
+var camera = new THREE.PerspectiveCamera(70, 1, 0.05, 200);
+var rig = new THREE.Group();
+rig.add(camera);
+scene.add(rig);
+camera.position.set(0, 1.6, 0);
+var pitch = 0;
+var Y = new THREE.Vector3(0, 1, 0);
+
+scene.add(new THREE.HemisphereLight(0xbfd4ff, 0x101828, 0.95));
+var sun = new THREE.DirectionalLight(0xffffff, 0.7);
+sun.position.set(5, 10, 7);
+scene.add(sun);
+
+/* ------------------------------------------------------------------ Zeichenhilfen */
+function makeCanvas(w, h) { var c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
+function texFrom(c) {
+  var t = new THREE.CanvasTexture(c);
+  t.encoding = THREE.sRGBEncoding;
+  t.anisotropy = maxAniso;
+  return t;
+}
+function rr(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+function wrap(ctx, text, x, y, maxW, lh) {
+  var words = text.split(' '), line = '';
+  for (var k = 0; k < words.length; k++) {
+    var t = line ? line + ' ' + words[k] : words[k];
+    if (ctx.measureText(t).width > maxW && line) { ctx.fillText(line, x, y); y += lh; line = words[k]; }
+    else line = t;
+  }
+  if (line) { ctx.fillText(line, x, y); y += lh; }
+  return y;
+}
+function makeLabel(lines, o) {
+  o = o || {};
+  var w = o.w || 1, h = o.h || 0.3, size = o.size || 60;
+  var c = makeCanvas(Math.round(w * 512), Math.round(h * 512));
+  var ctx = c.getContext('2d');
+  if (o.bg) {
+    ctx.fillStyle = o.bg; rr(ctx, 4, 4, c.width - 8, c.height - 8, 22); ctx.fill();
+    if (o.border) { ctx.strokeStyle = o.border; ctx.lineWidth = 6; ctx.stroke(); }
+  }
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  var lh = c.height / lines.length;
+  for (var k = 0; k < lines.length; k++) {
+    var s = (o.sizes && o.sizes[k]) || size;
+    ctx.font = (o.bold === false ? '' : 'bold ') + s + 'px ' + FONT;
+    while (ctx.measureText(lines[k]).width > c.width - 28 && s > 14) {
+      s -= 2; ctx.font = (o.bold === false ? '' : 'bold ') + s + 'px ' + FONT;
+    }
+    ctx.fillStyle = (o.colors && o.colors[k]) || o.color || '#ffffff';
+    ctx.fillText(lines[k], c.width / 2, lh * (k + 0.5));
+  }
+  var m = new THREE.Mesh(new THREE.PlaneGeometry(w, h),
+    new THREE.MeshBasicMaterial({ map: texFrom(c), transparent: true, depthWrite: false }));
+  return m;
+}
+
+/* ------------------------------------------------------------------ Umgebung */
+var pickables = [];
+var R = 11.5;
+
+(function buildWorld() {
+  var pts = [];
+  for (var k = 0; k < 900; k++) {
+    var u = Math.random(), a = Math.random() * Math.PI * 2, r = 90;
+    var s = Math.sqrt(1 - u * u);
+    pts.push(r * s * Math.cos(a), u * r * 0.9 + 3, r * s * Math.sin(a));
+  }
+  var sg = new THREE.BufferGeometry();
+  sg.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+  scene.add(new THREE.Points(sg, new THREE.PointsMaterial({ color: 0xcfe0ff, size: 0.5, fog: false })));
+
+  var gc = makeCanvas(256, 256), g = gc.getContext('2d');
+  g.fillStyle = '#0a1226'; g.fillRect(0, 0, 256, 256);
+  g.strokeStyle = '#1b2a4d'; g.lineWidth = 3; g.strokeRect(0, 0, 256, 256);
+  var gt = texFrom(gc); gt.wrapS = gt.wrapT = THREE.RepeatWrapping; gt.repeat.set(34, 34);
+  var floor = new THREE.Mesh(new THREE.CircleGeometry(17, 64), new THREE.MeshBasicMaterial({ map: gt }));
+  floor.rotation.x = -Math.PI / 2;
+  floor.userData = { kind: 'floor' };
+  scene.add(floor);
+  pickables.push(floor);
+
+  var ring = new THREE.Mesh(new THREE.RingGeometry(16.6, 17, 96), new THREE.MeshBasicMaterial({ color: 0x2ec4b6 }));
+  ring.rotation.x = -Math.PI / 2; ring.position.y = 0.01; scene.add(ring);
+  var ring2 = new THREE.Mesh(new THREE.RingGeometry(2.2, 2.26, 64), new THREE.MeshBasicMaterial({ color: 0x2a3b66 }));
+  ring2.rotation.x = -Math.PI / 2; ring2.position.y = 0.01; scene.add(ring2);
+})();
+
+/* ------------------------------------------------------------------ Mitte: Globus + Auftragstafel */
+var globe = new THREE.Group();
+(function () {
+  var col = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.45, 2.6, 24),
+    new THREE.MeshStandardMaterial({ color: 0x1a2850, roughness: 0.6 }));
+  col.position.y = 1.3; scene.add(col);
+  globe.position.y = 3.9;
+  globe.add(new THREE.Mesh(new THREE.SphereGeometry(1.25, 32, 20),
+    new THREE.MeshStandardMaterial({ color: 0x0f3460, roughness: 0.5, emissive: 0x06224a })));
+  globe.add(new THREE.Mesh(new THREE.SphereGeometry(1.28, 24, 14),
+    new THREE.MeshBasicMaterial({ color: 0x5ad1ff, wireframe: true, transparent: true, opacity: 0.45 })));
+  var halo = new THREE.Mesh(new THREE.TorusGeometry(1.7, 0.02, 8, 80), new THREE.MeshBasicMaterial({ color: 0x2ec4b6 }));
+  halo.rotation.x = Math.PI / 2.3; globe.add(halo);
+  globe.rotation.z = 0.41;
+  scene.add(globe);
+})();
+
+var CW = 1280, CH = 800;
+var centerCanvas = makeCanvas(CW, CH), centerTex = texFrom(centerCanvas);
+var RESET_RECT = { x: 930, y: 690, w: 290, h: 76 };
+[1, -1].forEach(function (sgn) {
+  var m = new THREE.Mesh(new THREE.PlaneGeometry(2.7, 2.7 * CH / CW), new THREE.MeshBasicMaterial({ map: centerTex }));
+  m.position.set(0, 1.55, 0.75 * sgn);
+  if (sgn < 0) m.rotation.y = Math.PI;
+  m.userData = { kind: 'center' };
+  scene.add(m); pickables.push(m);
+});
+var centerHover = false;
+
+function drawCenter() {
+  var c = centerCanvas.getContext('2d');
+  var done = 0, right = 0;
+  state.forEach(function (s, i) { if (s.answer >= 0) { done++; if (s.answer === STATIONS[i].zone) right++; } });
+  var crossed = STATIONS.filter(function (q) { return q.zone > 0; }).length;
+  var high = STATIONS.filter(function (q) { return q.zone === 2; }).length;
+  c.fillStyle = '#0d1528'; rr(c, 0, 0, CW, CH, 36); c.fill();
+  c.strokeStyle = '#2ec4b6'; c.lineWidth = 8; rr(c, 4, 4, CW - 8, CH - 8, 34); c.stroke();
+  c.textAlign = 'left'; c.textBaseline = 'alphabetic';
+  c.fillStyle = '#ffffff'; c.font = 'bold 66px ' + FONT; c.fillText('Die 9 planetaren Grenzen', 60, 100);
+  c.fillStyle = '#9fb3dd'; c.font = '34px ' + FONT; c.fillText('nach Johan Rockström u. a. · Planetary Health Check (PIK Potsdam)', 60, 150);
+
+  c.fillStyle = '#13213f'; rr(c, 50, 185, CW - 100, 170, 22); c.fill();
+  c.fillStyle = '#2ec4b6'; c.font = 'bold 30px ' + FONT; c.fillText('HYPOTHESE', 80, 232);
+  c.fillStyle = '#ffffff'; c.font = 'bold 44px ' + FONT;
+  wrap(c, '„Globale Umweltprobleme kann kein Staat allein lösen.“', 80, 292, CW - 160, 54);
+
+  c.fillStyle = '#2ec4b6'; c.font = 'bold 30px ' + FONT;
+  c.fillText(done === N ? 'AUSWERTUNG' : 'AUFTRAG', 60, 410);
+  c.fillStyle = '#e8eefc'; c.font = '36px ' + FONT;
+  var txt = done === N
+    ? crossed + ' von ' + N + ' Grenzen sind überschritten, ' + high + ' davon in der Hochrisikozone. Entscheidet gemeinsam: Ist die Hypothese bestätigt, widerlegt – oder zu einfach?'
+    : 'Schätzt an jeder der 9 Stationen: sicherer Bereich, steigendes Risiko oder Hochrisikozone? Dann aufdecken und Belege für und gegen die Hypothese sammeln.';
+  wrap(c, txt, 60, 460, CW - 120, 48);
+
+  for (var i = 0; i < N; i++) {
+    var x = 100 + i * 96, y = 690, ok = state[i].answer >= 0;
+    c.beginPath(); c.arc(x, y, 34, 0, Math.PI * 2);
+    c.fillStyle = ok ? ZC[STATIONS[i].zone] : '#1a2850'; c.fill();
+    c.strokeStyle = ok ? ZC[STATIONS[i].zone] : '#3a4f88'; c.lineWidth = 5; c.stroke();
+    c.fillStyle = ok ? '#06101f' : '#e8eefc'; c.font = 'bold 36px ' + FONT; c.textAlign = 'center';
+    c.fillText(String(i + 1), x, y + 13);
+  }
+  c.textAlign = 'left'; c.fillStyle = '#9fb3dd'; c.font = '28px ' + FONT;
+  c.fillText(done + ' von ' + N + ' erforscht · ' + right + ' × richtig eingeschätzt', 66, 770);
+
+  if (done > 0) {
+    var r = RESET_RECT;
+    c.fillStyle = centerHover ? '#2b3f78' : '#1a2850'; rr(c, r.x, r.y, r.w, r.h, 18); c.fill();
+    c.strokeStyle = '#3a4f88'; c.lineWidth = 4; c.stroke();
+    c.fillStyle = '#e8eefc'; c.font = 'bold 32px ' + FONT; c.textAlign = 'center';
+    c.fillText('Zurücksetzen', r.x + r.w / 2, r.y + 50);
+  }
+  centerTex.needsUpdate = true;
+
+  var p = document.getElementById('progress');
+  if (p) p.textContent = done + ' von ' + N + ' Grenzen erforscht · ' + right + ' × richtig eingeschätzt';
+}
+
+/* ------------------------------------------------------------------ Stationstafeln */
+var PW = 1280, PH = 1000;
+var BTN = [0, 1, 2].map(function (k) { return { x: 70, y: 560 + k * 140, w: PW - 140, h: 116 }; });
+
+function drawPanel(i) {
+  var s = STATIONS[i], st = state[i], o = objs[i];
+  var c = o.canvas.getContext('2d');
+  c.textAlign = 'left'; c.textBaseline = 'alphabetic';
+  c.fillStyle = '#0d1528'; rr(c, 0, 0, PW, PH, 36); c.fill();
+  c.strokeStyle = s.color; c.lineWidth = 8; rr(c, 4, 4, PW - 8, PH - 8, 34); c.stroke();
+  c.fillStyle = s.color; rr(c, 4, 4, PW - 8, 116, 34); c.fill();
+  c.fillRect(4, 80, PW - 8, 40);
+  c.fillStyle = '#06101f'; c.font = 'bold 58px ' + FONT;
+  c.fillText('Station ' + (i + 1) + ' · ' + s.title, 50, 84);
+
+  if (st.answer < 0) {
+    c.fillStyle = s.color; c.font = 'bold 30px ' + FONT; c.fillText('GRÜN, GELB ODER ROT?', 70, 190);
+    c.fillStyle = '#ffffff'; c.font = 'bold 48px ' + FONT;
+    wrap(c, s.q, 70, 258, PW - 140, 62);
+    for (var k = 0; k < 3; k++) {
+      var b = BTN[k];
+      c.fillStyle = st.hover === k ? '#2b3f78' : '#16244a'; rr(c, b.x, b.y, b.w, b.h, 22); c.fill();
+      c.strokeStyle = st.hover === k ? ZC[k] : '#3a4f88'; c.lineWidth = 5; c.stroke();
+      c.beginPath(); c.arc(b.x + 62, b.y + 58, 28, 0, Math.PI * 2); c.fillStyle = ZC[k]; c.fill();
+      c.fillStyle = '#ffffff'; c.font = '46px ' + FONT; c.fillText(ZONES[k], b.x + 120, b.y + 74);
+    }
+  } else {
+    var ok = st.answer === s.zone, zc = ZC[s.zone];
+    c.font = 'bold 30px ' + FONT;
+    c.fillStyle = ok ? '#7bd389' : '#f4a261';
+    c.fillText('Eure Schätzung: ' + ZSHORT[st.answer] + ' – ' +
+      (ok ? 'passt zur Einstufung der Forschung.' : 'die Forschung stuft anders ein.'), 70, 176);
+    c.font = 'bold 34px ' + FONT;
+    var bw = c.measureText(ZBADGE[s.zone]).width + 56;
+    c.fillStyle = zc; rr(c, 70, 200, bw, 62, 16); c.fill();
+    c.fillStyle = '#06101f'; c.fillText(ZBADGE[s.zone], 98, 243);
+    c.fillStyle = zc; c.font = 'bold 96px ' + FONT; c.fillText(s.big, 66, 366);
+    c.fillStyle = '#e8eefc'; c.font = '36px ' + FONT;
+    var y = wrap(c, s.explain, 70, 426, PW - 140, 46);
+    y += 20;
+    c.fillStyle = s.color; c.font = 'bold 27px ' + FONT; c.fillText('GENAU HINSCHAUEN', 70, y); y += 44;
+    c.fillStyle = '#c9d5f2'; c.font = '33px ' + FONT;
+    y = wrap(c, s.nuance, 70, y, PW - 140, 43);
+    y += 20;
+    c.fillStyle = s.color; c.font = 'bold 27px ' + FONT; c.fillText('FÜR DIE DISKUSSION', 70, y); y += 46;
+    c.fillStyle = '#ffffff'; c.font = 'bold 36px ' + FONT;
+    wrap(c, s.task, 70, y, PW - 140, 46);
+    c.fillStyle = '#8091b8'; c.font = '24px ' + FONT; c.fillText(SRC, 70, PH - 30);
+  }
+  o.tex.needsUpdate = true;
+}
+
+/* ------------------------------------------------------------------ 3D-Diagramme */
+function buildBars(parent, spec) {
+  var g = new THREE.Group(), n = spec.items.length, sp = 0.82, H = 1.9, base = 0.6, parts = [];
+  spec.items.forEach(function (it, k) {
+    var h = Math.max(0.03, it.v / spec.max * H);
+    var geo = new THREE.BoxGeometry(0.52, h, 0.52); geo.translate(0, h / 2, 0);
+    var bar = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: it.color, roughness: 0.45, emissive: it.color, emissiveIntensity: 0.25 }));
+    var x = (k - (n - 1) / 2) * sp;
+    bar.position.set(x, base, 0); g.add(bar);
+    var val = makeLabel([it.text], { w: 0.8, h: 0.3, size: 96 });
+    val.position.set(x, base + h + 0.22, 0); g.add(val);
+    var nm = makeLabel(it.label, { w: 0.78, h: 0.46, size: 76, color: '#e8eefc' });
+    nm.position.set(x, 0.3, 0.47); g.add(nm);
+    parts.push({ bar: bar, val: val, h: h });
+  });
+  if (spec.line) {
+    var ly = base + spec.line.v / spec.max * H;
+    var lm = new THREE.Mesh(new THREE.BoxGeometry(n * sp + 0.3, 0.02, 0.6), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+    lm.position.set(0, ly, 0); g.add(lm);
+    var ll = makeLabel([spec.line.text], { w: 1.5, h: 0.24, size: 84, bg: 'rgba(13,21,40,0.9)' });
+    ll.position.set(0, ly + 0.16, 0.32); g.add(ll);
+  }
+  g.userData.update = function (p) {
+    parts.forEach(function (q) {
+      q.bar.scale.y = Math.max(0.001, p);
+      q.val.position.y = base + q.h * p + 0.22;
+    });
+  };
+  parent.add(g);
+  return g;
+}
+
+function buildNote(parent, spec) {
+  var g = new THREE.Group();
+  var m = makeLabel(spec.lines, { w: 2.2, h: 1.0, size: 110, color: '#e8eefc', bg: 'rgba(13,21,40,0.92)', border: '#c77dff' });
+  m.position.set(0, 1.55, 0); g.add(m);
+  g.userData.update = function (p) { m.scale.setScalar(Math.max(0.001, p)); };
+  parent.add(g);
+  return g;
+}
+
+function buildWaffle(parent, spec) {
+  var g = new THREE.Group(), step = 0.16, size = 0.13, y0 = 0.75, cubes = [];
+  var geo = new THREE.BoxGeometry(size, size, size);
+  var idx = 0;
+  spec.segs.forEach(function (sg) {
+    var mat = new THREE.MeshStandardMaterial({ color: sg.color, roughness: 0.45, emissive: sg.color, emissiveIntensity: 0.25 });
+    for (var k = 0; k < sg.n; k++, idx++) {
+      var m = new THREE.Mesh(geo, mat);
+      m.position.set((idx % 10 - 4.5) * step, y0 + Math.floor(idx / 10) * step, 0);
+      g.add(m); cubes.push(m);
+    }
+  });
+  var lc = makeCanvas(1024, 256), c = lc.getContext('2d');
+  c.fillStyle = 'rgba(13,21,40,0.92)'; rr(c, 4, 4, 1016, 248, 24); c.fill();
+  c.textBaseline = 'middle'; c.font = 'bold 42px ' + FONT;
+  spec.segs.forEach(function (sg, k) {
+    var x = 36 + (k % 2) * 472, y = spec.segs.length > 2 ? 78 + Math.floor(k / 2) * 100 : 128;
+    c.fillStyle = sg.color; c.fillRect(x, y - 24, 48, 48);
+    c.fillStyle = '#ffffff'; c.fillText(sg.label, x + 66, y + 2);
+  });
+  var leg = new THREE.Mesh(new THREE.PlaneGeometry(2.1, 0.525), new THREE.MeshBasicMaterial({ map: texFrom(lc), transparent: true }));
+  leg.position.set(0, y0 + 10 * step + 0.33, 0); g.add(leg);
+  var cap = makeLabel(['1 Würfel = 1 %'], { w: 1.4, h: 0.3, size: 80, color: '#c9d5f2' });
+  cap.position.set(0, 0.3, 0.47); g.add(cap);
+  g.userData.update = function (p) {
+    cubes.forEach(function (m, k) {
+      var q = Math.min(1, Math.max(0, p * 2.2 - k / 100 * 1.2));
+      m.scale.setScalar(Math.max(0.001, q));
+    });
+  };
+  parent.add(g);
+  return g;
+}
+
+/* ------------------------------------------------------------------ Stationen aufbauen */
+var objs = [];
+STATIONS.forEach(function (s, i) {
+  var th = -(i + 1) * 2 * Math.PI / (N + 1);
+  var g = new THREE.Group();
+  g.position.set(R * Math.sin(th), 0, R * Math.cos(th));
+  g.rotation.y = th + Math.PI;           // lokale +z-Achse zeigt zur Mitte
+  scene.add(g);
+  var col = new THREE.Color(s.color);
+
+  var pc = makeCanvas(PW, PH), ptex = texFrom(pc);
+  var panel = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 2.6 * PH / PW), new THREE.MeshBasicMaterial({ map: ptex }));
+  panel.position.set(-1.5, 1.72, 0); panel.rotation.y = 0.34;
+  panel.userData = { kind: 'panel', i: i };
+  g.add(panel); pickables.push(panel);
+
+  var vg = new THREE.Group(); vg.position.set(1.75, 0, 0); vg.rotation.y = -0.34; g.add(vg);
+  var plinth = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.6, 0.9), new THREE.MeshStandardMaterial({ color: 0x16244a, roughness: 0.7 }));
+  plinth.position.y = 0.3; vg.add(plinth);
+  var edge = new THREE.Mesh(new THREE.BoxGeometry(2.64, 0.04, 0.94), new THREE.MeshBasicMaterial({ color: col }));
+  edge.position.y = 0.6; vg.add(edge);
+
+  var qc = makeCanvas(256, 256), q = qc.getContext('2d');
+  q.fillStyle = '#16244a'; q.fillRect(0, 0, 256, 256);
+  q.strokeStyle = s.color; q.lineWidth = 14; q.strokeRect(7, 7, 242, 242);
+  q.fillStyle = s.color; q.font = 'bold 190px ' + FONT; q.textAlign = 'center'; q.textBaseline = 'middle'; q.fillText('?', 128, 138);
+  var qcube = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.7, 0.7), new THREE.MeshBasicMaterial({ map: texFrom(qc) }));
+  qcube.position.y = 1.55; vg.add(qcube);
+
+  var viz = s.viz.type === 'waffle' ? buildWaffle(vg, s.viz) : s.viz.type === 'note' ? buildNote(vg, s.viz) : buildBars(vg, s.viz);
+  viz.visible = false;
+
+  var sign = makeLabel(['Station ' + (i + 1), s.title],
+    { w: 2.6, h: 0.9, sizes: [70, 120], colors: ['#c9d5f2', s.color], bg: 'rgba(13,21,40,0.9)', border: s.color });
+  sign.position.set(0, 3.55, -0.3); g.add(sign);
+  var beacon = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 7, 8), new THREE.MeshBasicMaterial({ color: col }));
+  beacon.position.set(0, 3.5, -1.1); g.add(beacon);
+
+  var disc = new THREE.Mesh(new THREE.CircleGeometry(0.6, 40),
+    new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.45 }));
+  disc.rotation.x = -Math.PI / 2; disc.position.set(0.1, 0.02, 2.9);
+  disc.userData = { kind: 'tp', i: i };
+  g.add(disc); pickables.push(disc);
+  var dring = new THREE.Mesh(new THREE.RingGeometry(0.6, 0.68, 40), new THREE.MeshBasicMaterial({ color: col }));
+  dring.rotation.x = -Math.PI / 2; dring.position.set(0.1, 0.025, 2.9); g.add(dring);
+  var dnum = makeLabel([String(i + 1)], { w: 0.6, h: 0.6, size: 220 });
+  dnum.rotation.x = -Math.PI / 2; dnum.position.set(0.1, 0.03, 2.9); g.add(dnum);
+
+  g.updateMatrixWorld(true);
+  objs.push({ group: g, canvas: pc, tex: ptex, qcube: qcube, viz: viz,
+    stand: disc.getWorldPosition(new THREE.Vector3()), look: g.getWorldPosition(new THREE.Vector3()) });
+});
+
+// Startmarke
+var START = new THREE.Vector3(0, 0, 5.6);
+(function () {
+  var d = new THREE.Mesh(new THREE.CircleGeometry(0.6, 40), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.3 }));
+  d.rotation.x = -Math.PI / 2; d.position.set(START.x, 0.02, START.z); d.userData = { kind: 'start' };
+  scene.add(d); pickables.push(d);
+  var l = makeLabel(['Start'], { w: 0.9, h: 0.4, size: 130 });
+  l.rotation.x = -Math.PI / 2; l.position.set(START.x, 0.03, START.z); scene.add(l);
+})();
+
+/* ------------------------------------------------------------------ Bewegung */
+function teleport(x, z, faceYaw) {
+  var presenting = renderer.xr.isPresenting;
+  if (faceYaw !== undefined) {
+    var e = new THREE.Euler().setFromQuaternion(camera.quaternion, 'YXZ');
+    rig.rotation.y = faceYaw - (presenting ? e.y : 0);
+  }
+  var off = new THREE.Vector3(camera.position.x, 0, camera.position.z).applyAxisAngle(Y, rig.rotation.y);
+  rig.position.set(x - off.x, 0, z - off.z);
+}
+function gotoStation(i) {
+  var o = objs[i];
+  teleport(o.stand.x, o.stand.z, Math.atan2(o.stand.x - o.look.x, o.stand.z - o.look.z));
+  if (!renderer.xr.isPresenting) { pitch = 0; camera.rotation.set(0, 0, 0); }
+}
+function gotoStart() {
+  teleport(START.x, START.z, 0);
+  if (!renderer.xr.isPresenting) { pitch = 0; camera.rotation.set(0, 0, 0); }
+}
+function clampRig() {
+  var r = Math.hypot(rig.position.x, rig.position.z);
+  if (r > 15.8) { rig.position.x *= 15.8 / r; rig.position.z *= 15.8 / r; }
+}
+
+/* ------------------------------------------------------------------ Auswahl */
+function answer(i, b) {
+  if (state[i].answer >= 0) return;
+  state[i].answer = b; state[i].hover = -1; state[i].t0 = performance.now();
+  objs[i].qcube.visible = false;
+  objs[i].viz.visible = true; objs[i].viz.userData.update(0);
+  drawPanel(i); drawCenter(); updateNav();
+}
+function resetAll() {
+  state.forEach(function (s, i) {
+    s.answer = -1; s.hover = -1; s.t0 = 0;
+    objs[i].qcube.visible = true; objs[i].viz.visible = false; drawPanel(i);
+  });
+  drawCenter(); updateNav();
+}
+
+var raycaster = new THREE.Raycaster(); raycaster.far = 45;
+function readHit() {
+  var hits = raycaster.intersectObjects(pickables, false);
+  if (!hits.length) return null;
+  var h = hits[0], ud = h.object.userData, info = { k: ud.kind, i: ud.i, b: -1, point: h.point, dist: h.distance };
+  if (ud.kind === 'panel' && h.uv && state[ud.i].answer < 0) {
+    var x = h.uv.x * PW, y = (1 - h.uv.y) * PH;
+    for (var k = 0; k < 3; k++) { var r = BTN[k]; if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) info.b = k; }
+  }
+  if (ud.kind === 'center' && h.uv) {
+    var cx = h.uv.x * CW, cy = (1 - h.uv.y) * CH, q = RESET_RECT;
+    info.reset = cx >= q.x && cx <= q.x + q.w && cy >= q.y && cy <= q.y + q.h && state.some(function (s) { return s.answer >= 0; });
+  }
+  return info;
+}
+function isActive(info) {
+  return !!info && ((info.k === 'panel' && info.b >= 0) || info.k === 'tp' || info.k === 'start' || (info.k === 'center' && info.reset));
+}
+function activate(info) {
+  if (!info) return;
+  if (info.k === 'panel') { if (info.b >= 0) answer(info.i, info.b); }
+  else if (info.k === 'tp') gotoStation(info.i);
+  else if (info.k === 'start') gotoStart();
+  else if (info.k === 'center') { if (info.reset) resetAll(); }
+  else if (info.k === 'floor') {
+    var r = Math.hypot(info.point.x, info.point.z);
+    if (r > 1.4 && r < 15.8) teleport(info.point.x, info.point.z);
+  }
+}
+function applyHover(infos) {
+  var hv = STATIONS.map(function () { return -1; }), ch = false;
+  infos.forEach(function (f) {
+    if (!f) return;
+    if (f.k === 'panel' && f.b >= 0) hv[f.i] = f.b;
+    if (f.k === 'center' && f.reset) ch = true;
+  });
+  hv.forEach(function (v, i) { if (state[i].hover !== v) { state[i].hover = v; if (state[i].answer < 0) drawPanel(i); } });
+  if (ch !== centerHover) { centerHover = ch; drawCenter(); }
+}
+
+/* ------------------------------------------------------------------ Maus / Touch / Tastatur */
+var drag = null, mouseInfo = null, ndc = new THREE.Vector2();
+function rayFromPointer(ev) {
+  var r = canvas.getBoundingClientRect();
+  ndc.set((ev.clientX - r.left) / r.width * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
+  raycaster.setFromCamera(ndc, camera);
+  return readHit();
+}
+canvas.addEventListener('pointerdown', function (ev) {
+  if (renderer.xr.isPresenting) return;
+  drag = { x: ev.clientX, y: ev.clientY, moved: 0 };
+  try { canvas.setPointerCapture(ev.pointerId); } catch (e) {}
+});
+canvas.addEventListener('pointermove', function (ev) {
+  if (renderer.xr.isPresenting) return;
+  if (drag) {
+    var dx = ev.clientX - drag.x, dy = ev.clientY - drag.y;
+    drag.x = ev.clientX; drag.y = ev.clientY; drag.moved += Math.abs(dx) + Math.abs(dy);
+    if (drag.moved > 6) {
+      rig.rotation.y += dx * 0.004;
+      pitch = Math.max(-1.2, Math.min(1.2, pitch + dy * 0.004));
+      camera.rotation.set(pitch, 0, 0);
+    }
+  } else {
+    mouseInfo = rayFromPointer(ev);
+    canvas.style.cursor = isActive(mouseInfo) ? 'pointer' : 'grab';
+  }
+});
+canvas.addEventListener('pointerup', function (ev) {
+  if (renderer.xr.isPresenting) { drag = null; return; }
+  var d = drag; drag = null;
+  if (d && d.moved <= 6) activate(rayFromPointer(ev));
+});
+canvas.addEventListener('pointercancel', function () { drag = null; });
+
+var keys = {};
+window.addEventListener('keydown', function (e) { keys[e.code] = true; });
+window.addEventListener('keyup', function (e) { keys[e.code] = false; });
+function desktopMove(dt) {
+  var f = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0);
+  var s = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
+  var t = (keys.ArrowLeft ? 1 : 0) - (keys.ArrowRight ? 1 : 0);
+  if (t) rig.rotation.y += t * 1.6 * dt;
+  if (f || s) {
+    var yaw = rig.rotation.y, sp = 3.2 * dt;
+    rig.position.x += (-Math.sin(yaw) * f + Math.cos(yaw) * s) * sp;
+    rig.position.z += (-Math.cos(yaw) * f - Math.sin(yaw) * s) * sp;
+    clampRig();
+  }
+}
+
+/* ------------------------------------------------------------------ VR-Controller */
+var tmpM = new THREE.Matrix4(), tmpV = new THREE.Vector3();
+function rayFromCtrl(c) {
+  tmpM.identity().extractRotation(c.matrixWorld);
+  raycaster.ray.origin.setFromMatrixPosition(c.matrixWorld);
+  raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tmpM);
+  return readHit();
+}
+var ctrls = [0, 1].map(function (n) {
+  var c = renderer.xr.getController(n);
+  rig.add(c);
+  var line = new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -1)]),
+    new THREE.LineBasicMaterial({ color: 0x9fd8ff }));
+  line.scale.z = 6; c.add(line);
+  var dot = new THREE.Mesh(new THREE.SphereGeometry(0.03, 12, 8), new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false }));
+  dot.visible = false; scene.add(dot);
+  var o = { c: c, line: line, dot: dot, on: false, hand: '' };
+  c.addEventListener('connected', function (e) { o.on = true; o.hand = (e.data && e.data.handedness) || ''; });
+  c.addEventListener('disconnected', function () { o.on = false; dot.visible = false; });
+  c.addEventListener('selectstart', function () { activate(rayFromCtrl(c)); });
+  return o;
+});
+
+var snapReady = true;
+function xrMove(dt) {
+  var session = renderer.xr.getSession();
+  if (!session) return;
+  var fwd = 0, strafe = 0, turn = 0;
+  session.inputSources.forEach(function (src) {
+    var gp = src.gamepad;
+    if (!gp || !gp.axes || gp.axes.length < 4) return;
+    var ax = gp.axes[2], ay = gp.axes[3];
+    if (Math.abs(ay) > 0.25) fwd += -ay;
+    if (src.handedness === 'left') { if (Math.abs(ax) > 0.25) strafe += ax; }
+    else if (Math.abs(ax) > 0.6) turn = ax > 0 ? -1 : 1;
+  });
+  if (turn && snapReady) {
+    snapReady = false;
+    var before = camera.getWorldPosition(new THREE.Vector3());
+    rig.rotation.y += turn * Math.PI / 6;
+    rig.updateMatrixWorld(true);
+    var after = new THREE.Vector3(camera.position.x, 0, camera.position.z).applyAxisAngle(Y, rig.rotation.y).add(rig.position);
+    rig.position.x += before.x - after.x; rig.position.z += before.z - after.z;
+  } else if (!turn) snapReady = true;
+  if (fwd || strafe) {
+    camera.getWorldDirection(tmpV); tmpV.y = 0;
+    if (tmpV.lengthSq() < 1e-4) return;
+    tmpV.normalize();
+    var sp = 2.2 * dt;
+    rig.position.x += (tmpV.x * fwd - tmpV.z * strafe) * sp;
+    rig.position.z += (tmpV.z * fwd + tmpV.x * strafe) * sp;
+    clampRig();
+  }
+}
+
+/* ------------------------------------------------------------------ Oberfläche */
+var nav = document.getElementById('nav'), navBtns = [];
+(function () {
+  var b = document.createElement('button'); b.textContent = 'Start'; b.onclick = gotoStart; nav.appendChild(b);
+  STATIONS.forEach(function (s, i) {
+    var x = document.createElement('button');
+    x.title = s.title; x.onclick = function () { gotoStation(i); };
+    nav.appendChild(x); navBtns.push(x);
+  });
+})();
+function updateNav() {
+  navBtns.forEach(function (b, i) {
+    var d = state[i].answer >= 0;
+    b.textContent = (i + 1) + ' ' + STATIONS[i].title + (d ? ' ✓' : '');
+    b.className = d ? 'done' : '';
+  });
+}
+document.getElementById('resetbtn').onclick = resetAll;
+document.getElementById('toggleHelp').onclick = function () {
+  var h = document.getElementById('help'); h.hidden = !h.hidden;
+  this.textContent = h.hidden ? 'Hilfe einblenden' : 'Hilfe ausblenden';
+};
+
+var vrbtn = document.getElementById('vrbtn'), vrnote = document.getElementById('vrnote');
+var NO_VR = 'Auf diesem Gerät oder in dieser Ansicht ist kein VR-Modus verfügbar. Die Station lässt sich trotzdem am Bildschirm erkunden.';
+if (navigator.xr && navigator.xr.isSessionSupported) {
+  navigator.xr.isSessionSupported('immersive-vr').then(function (ok) {
+    if (ok) { vrbtn.hidden = false; vrnote.textContent = 'Brille erkannt.'; }
+    else vrnote.textContent = NO_VR;
+  }).catch(function () { vrnote.textContent = NO_VR; });
+} else vrnote.textContent = NO_VR;
+
+vrbtn.onclick = function () {
+  if (renderer.xr.isPresenting) { renderer.xr.getSession().end(); return; }
+  navigator.xr.requestSession('immersive-vr', { optionalFeatures: ['local-floor', 'bounded-floor', 'hand-tracking'] })
+    .then(function (session) {
+      camera.position.set(0, 0, 0); camera.rotation.set(0, 0, 0);
+      renderer.xr.setSession(session);
+      vrbtn.textContent = 'VR beenden';
+      session.addEventListener('end', function () {
+        vrbtn.textContent = 'VR starten';
+        camera.position.set(0, 1.6, 0); pitch = 0; camera.rotation.set(0, 0, 0);
+        ctrls.forEach(function (o) { o.dot.visible = false; });
+        onResize();
+      });
+    })
+    .catch(function (err) {
+      vrnote.textContent = 'VR konnte nicht gestartet werden (' + (err && err.name ? err.name : 'Fehler') +
+        '). Falls die Seite eingebettet läuft: direkt im Browser der Brille öffnen.';
+    });
+};
+
+function onResize() {
+  if (renderer.xr.isPresenting) return;
+  var w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / Math.max(1, h); camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', onResize);
+
+/* ------------------------------------------------------------------ Schleife */
+var last = performance.now();
+function frame() {
+  var now = performance.now(), dt = Math.min(0.05, (now - last) / 1000); last = now;
+  globe.rotation.y += dt * 0.12;
+  for (var i = 0; i < N; i++) {
+    var o = objs[i], st = state[i];
+    if (o.qcube.visible) { o.qcube.rotation.y += dt * 0.8; o.qcube.position.y = 1.55 + Math.sin(now / 700 + i) * 0.06; }
+    if (st.t0) {
+      var p = Math.min(1, (now - st.t0) / 1400);
+      o.viz.userData.update(1 - Math.pow(1 - p, 3));
+      if (p >= 1) st.t0 = 0;
+    }
+  }
+  if (renderer.xr.isPresenting) {
+    xrMove(dt);
+    var infos = ctrls.map(function (o) {
+      if (!o.on) { o.dot.visible = false; return null; }
+      var f = rayFromCtrl(o.c);
+      if (f) { o.line.scale.z = f.dist; o.dot.position.copy(f.point); o.dot.visible = true;
+        o.dot.scale.setScalar(isActive(f) ? 1.8 : 1); }
+      else { o.line.scale.z = 6; o.dot.visible = false; }
+      return f;
+    });
+    applyHover(infos);
+  } else {
+    desktopMove(dt);
+    applyHover([drag ? null : mouseInfo]);
+  }
+  renderer.render(scene, camera);
+}
+
+for (var k = 0; k < N; k++) drawPanel(k);
+drawCenter(); updateNav(); onResize(); gotoStart();
+window.__station = { answer: answer, gotoStation: gotoStation, gotoStart: gotoStart, state: state };
+renderer.setAnimationLoop(frame);
+})();
+</script>
+</body>
+</html>
