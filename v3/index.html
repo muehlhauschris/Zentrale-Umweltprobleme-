@@ -153,7 +153,7 @@ var OCARDS = {
   co2: { t: 'Kohlendioxid (CO₂)', c: '#b8c4d9', l: ['Ein Kohlenstoffatom (dunkel), zwei Sauerstoffatome (rot).', 'Entsteht vor allem beim Verbrennen von Kohle, Öl und Gas.', 'Lässt Sonnenlicht durch, hält aber Wärmestrahlung auf.', 'Heute rund 423 ppm in der Luft; als sichere Grenze gelten 350 ppm.'] },
   acid: { t: 'Kohlensäure im Meer', c: '#9cff3a', l: ['Ein Teil des CO₂ löst sich im Meerwasser und bildet Kohlensäure.', 'Das Wasser wird saurer.', 'Korallen und Muscheln können ihre Kalkschalen schlechter aufbauen.'] }
 };
-var S = { W: 1.5, diet: 0, farm: 0, mob: 1, filt: 0, fl: [0, 0], cfc: 0, buy: {}, heat: 100, uv: 100, mode: 'orbit', site: -1, card: null,
+var S = { W: 1.5, diet: 0, farm: 0, mob: 1, filt: 0, fl: [0, 0], cfc: 0, buy: {}, heat: 100, uv: 100, mode: 'orbit', site: -1, card: null, last: null,
           harvest: null, harvestText: '' };
 GOODS.forEach(function (g) { S.buy[g[0]] = 0; });
 
@@ -549,15 +549,15 @@ panel.userData.pick = function (h, ph) {
   if (inRect(R_SL, x, y)) setW(x);
   else if (ph === 'down' && inRect(R_BTN, x, y)) { if (S.mode === 'ground') ascend(); else startHarvest(); }
 };
-var warnText = '', warnShown = '', warnCv = makeCanvas(1024, 160), warnTex = texFrom(warnCv);
+var warnKind = 'warn', warnText = '', warnShown = '', warnCv = makeCanvas(1024, 160), warnTex = texFrom(warnCv);
 var warnMesh = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 0.156), new THREE.MeshBasicMaterial({ map: warnTex, transparent: true, depthTest: false }));
 warnMesh.position.set(0, -0.3, -1.2); warnMesh.visible = false; camera.add(warnMesh);
 function showWarn() {
   if (warnText === warnShown) return;
   warnShown = warnText; panelDirty = true;
-  var el = document.getElementById('warn'); el.hidden = !warnText; el.textContent = warnText;
+  var el = document.getElementById('warn'); el.hidden = !warnText; el.textContent = warnText; el.style.background = warnKind === 'info' ? 'rgba(13,90,95,0.92)' : 'rgba(160,20,30,0.9)';
   var c = warnCv.getContext('2d'); c.clearRect(0, 0, 1024, 160);
-  if (warnText) { c.fillStyle = 'rgba(160,20,30,0.92)'; rr(c, 4, 4, 1016, 152, 30); c.fill(); c.fillStyle = '#fff'; c.textAlign = 'center'; c.textBaseline = 'middle';
+  if (warnText) { c.fillStyle = warnKind === 'info' ? 'rgba(13,90,95,0.94)' : 'rgba(160,20,30,0.92)'; rr(c, 4, 4, 1016, 152, 30); c.fill(); c.fillStyle = '#fff'; c.textAlign = 'center'; c.textBaseline = 'middle';
     var s = 40; c.font = 'bold ' + s + 'px ' + FONT; while (c.measureText(warnText).width > 980 && s > 16) { s -= 2; c.font = 'bold ' + s + 'px ' + FONT; } c.fillText(warnText, 512, 82); }
   warnTex.needsUpdate = true;
 }
@@ -643,13 +643,15 @@ function insects(n, cx, cz, r, color) {
   var p = new THREE.Points(geo, new THREE.PointsMaterial({ color: color || 0xffe14a, size: 0.045 })); p.position.set(cx, 0, cz); groundRoot.add(p);
   anim.push(function (dt, now) { p.rotation.y += dt * 0.35; p.position.y = Math.sin(now / 400) * 0.08; });
 }
-function fishes(n, cx, y, cz, r, dead, col) {
+function fishes(n, cx, y, cz, r, dead, col, lane) {
   for (var k = 0; k < n; k++) (function (k) {
     var g = G(), a = hash(k + cx * 3) * 6.28, rad = 1.5 + hash(k * 7 + cz) * r, yy = y + (dead ? 0 : (hash(k) - 0.5) * 1.2);
     if (has('fish')) put(g, 'fish', 0.9, 0, -0.15, 0, 0, true);
     else { add(g, 'sph', dead ? 0xe8e4d8 : (col || 0x8fb7d9), 0, 0, 0, 0.26, 0.3, 0.8); var t = add(g, 'cone', dead ? 0xe8e4d8 : (col || 0x8fb7d9), 0, 0, -0.5, 0.3, 0.3, 0.06); t.rotation.x = Math.PI / 2; }
     add(g, 'sph', 0xff9f43, 0.02, 0.02, 0.1, 0.07, 0.07, 0.07, 1, true);
     if (dead) { g.position.set(cx + Math.cos(a) * rad, yy, cz + Math.sin(a) * rad); g.rotation.z = Math.PI / 2; g.rotation.y = a; return; }
+    if (lane) { var lx = lane.x + (hash(k * 2.7 + cx) - 0.5) * (lane.w - 2.2), half = (lane.z1 - lane.z0) / 2, mid = (lane.z0 + lane.z1) / 2, sp = 0.12 + hash(k + 1.3) * 0.1;
+      anim.push(function (dt) { a += dt * sp; g.position.set(lx, 0.0, mid + Math.sin(a) * half); g.rotation.y = Math.cos(a) > 0 ? 0 : Math.PI; }); return; }
     anim.push(function (dt) { a += dt * 0.35; g.position.set(cx + Math.cos(a) * rad, yy, cz + Math.sin(a) * rad); g.rotation.y = -a; });
   })(k);
 }
@@ -773,6 +775,45 @@ function toy(g, k) {
     if (k === 2) add(g, 'box', 0x7bd389, 0, 0.07, 0.123, 0.3, 0.04, 0.01); else add(g, 'cyl', 0x555555, -0.27, 0.05, 0.07, 0.04, 0.08, 0.04).rotation.z = Math.PI / 2; }
 }
 
+/* ================================================================== Reisebildschirm am Ort „Zuhause" */
+var INFO = {
+  plate: { t: 'Dein Teller wirkt nicht hier, sondern dort:', s: 'Dein Teller wirkt am Amazonas und am Golf von Mexiko – reise hin.', d: [[2, 'Amazonas', 'Wald weicht Weide und Futteranbau'], [7, 'Golf von Mexiko', 'Düngerfabriken, Algen, tote Fische'], [6, 'Kalifornien', 'der Grundwasserstand'], [-1, 'Orbit', 'Rodung und Fabriken von oben']] },
+  crate: { t: 'Deine Wahl am Markt wirkt gleich nebenan:', s: 'Sieh dir das Feld rechts von dir an: Traktor, Insekten, Vögel.', d: [[null, 'Feld rechts neben dem Platz', 'Traktor, Insekten, Vögel, Früchte an den Bäumen']] },
+  good: { t: 'Dein Einkauf wirkt dort:', s: 'Dein Einkauf wirkt in Kalifornien und im Sahel – und in deinem Körper.', d: [[6, 'Kalifornien', 'Brunnen und Kanal'], [3, 'Sahel', 'der Dorfbrunnen'], [null, 'Figur „Dein Körper“ links', 'neue leuchtende Punkte']] },
+  toy: { t: 'Deine Fahrt wirkt dort:', s: 'Deine Fahrt wirkt im Orbit und am Great Barrier Reef – reise hin.', d: [[-1, 'Orbit', 'die CO₂-Spur von zu Hause in Luft und Meer'], [4, 'Great Barrier Reef', 'Kohlensäure sinkt ins Riff']] },
+  filter: { t: 'Deine Filter wirken dort:', s: 'Deine Filter wirken im Industal und im Orbit – reise hin.', d: [[1, 'Industal', 'der Dunst lichtet sich – und es wird heißer'], [-1, 'Orbit', 'der Dunst über Asien, die Wärmestrahlung']] },
+  cfc: { t: 'Das Einsammeln wirkt dort:', s: 'Das Einsammeln wirkt in der Antarktis – reise hin.', d: [[5, 'Antarktis', 'das Ozonloch am Himmel']] }
+};
+var screenCache = {}, R_ROWS = [0, 1, 2, 3].map(function (k) { return { x: 40, y: 200 + k * 135, w: 1120, h: 118 }; });
+function travelScreen(x, z) {
+  var key = S.last || 'none', info = INFO[S.last];
+  if (!screenCache[key]) {
+    var c = makeCanvas(1200, 760), g = c.getContext('2d');
+    g.fillStyle = '#0d1528'; rr(g, 0, 0, 1200, 760, 30); g.fill(); g.strokeStyle = '#2ec4b6'; g.lineWidth = 10; rr(g, 5, 5, 1190, 750, 26); g.stroke();
+    g.fillStyle = '#2ec4b6'; g.font = 'bold 34px ' + FONT; g.fillText('REISEBILDSCHIRM', 44, 70);
+    g.fillStyle = '#ffffff'; g.font = 'bold 50px ' + FONT;
+    if (!info) { wrap(g, 'Triff an einem Stand eine Entscheidung. Hier steht danach, wo auf der Welt sie wirkt – und du kannst direkt hinreisen.', 44, 190, 1110, 66); }
+    else {
+      g.fillText(info.t, 44, 150);
+      info.d.forEach(function (d, k) { var r = R_ROWS[k], go = d[0] !== null;
+        g.fillStyle = go ? '#17395f' : '#1a2440'; rr(g, r.x, r.y, r.w, r.h, 20); g.fill();
+        if (go) { g.strokeStyle = '#2ec4b6'; g.lineWidth = 5; g.stroke(); }
+        g.fillStyle = '#ffffff'; g.font = 'bold 46px ' + FONT; g.fillText((go ? '➜ ' : '') + d[1], r.x + 28, r.y + 54);
+        g.fillStyle = '#b9c6e6'; g.font = '32px ' + FONT; g.fillText(d[2], r.x + 28, r.y + 98); });
+    }
+    screenCache[key] = texFrom(c);
+  }
+  var m = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 3.4 * 760 / 1200), new THREE.MeshBasicMaterial({ map: screenCache[key] }));
+  m.position.set(x, 2.3, z); m.lookAt(0, 2.0, 9); groundRoot.add(m);
+  add(groundRoot, 'cyl', 0x555a63, x, 0.6, z, 0.2, 1.2, 0.2);
+  m.userData.pick = function (h, ph) {
+    if (ph !== 'down' || !h.uv || !info) return;
+    var px = h.uv.x * 1200, py = (1 - h.uv.y) * 760;
+    info.d.forEach(function (d, k) { if (d[0] !== null && inRect(R_ROWS[k], px, py)) { if (d[0] < 0) ascend(); else land(d[0]); } });
+  };
+  P_ground.push(m);
+}
+
 /* ================================================================== Die acht Orte */
 var BUILD = {
   home: function () {
@@ -781,6 +822,7 @@ var BUILD = {
     put(groundRoot, 'wind-turbine', 22, 46, 0, -52, 0.5); put(groundRoot, 'wind-turbine', 22, 58, 0, -40, 0.9);
     var ins = remain('ins') * (S.farm ? 1 : 0.77), ver = remain('vert') * (S.farm ? 1 : 0.77), e = eutro();
     var xs = [-10, -6, -2, 2, 6, 10], zz = function (x) { return -5 + 0.06 * x * x; }, T, q, i;
+    travelScreen(4.6, 2.6);
     /* Restaurant: Teller vom Buffet an den eigenen Tisch stellen */
     T = tableAt(xs[0], zz(xs[0]), 2.9, 'Restaurant', 0xf4a261);
     q = wpos(T, 0, 0, 2.3); add(groundRoot, 'cyl', 0x6b5236, q.x, 0.4, q.z, 0.25, 0.8, 0.25); add(groundRoot, 'cyl', 0xf4e9d8, q.x, 0.82, q.z, 1.3, 0.05, 1.3);
@@ -855,7 +897,7 @@ var BUILD = {
     var scr = S.card ? board(CARDS[S.card].t, CARDS[S.card].l, CARDS[S.card].c) : label(['Analysegerät: Punkt in die Schale legen'], 2.2, 0.3, { bg: 'rgba(13,21,40,0.92)' });
     if (S.card) scr.scale.setScalar(0.8); scr.position.set(-1.4, 2.2, 0.3); b.add(scr);
     /* Fluss */
-    water(-24, -5, 9, 90, mix(0x2a7fd0, 0x5a9a2a, e)); fishes(Math.round(2 + 6 * (1 - e)), -24, 0.35, 2, 3.5, false);
+    water(-24, -5, 9, 90, mix(0x2a7fd0, 0x5a9a2a, e)); fishes(Math.round(2 + 6 * (1 - e)), -24, 0.35, 2, 3.5, false, null, { x: -24, w: 9, z0: -30, z1: 26 });
     /* Feld, Traktor, Obstbäume */
     var rows = new THREE.InstancedMesh(GEO.box, mat(0x4f9a3a), 9), rd = new THREE.Object3D();
     for (i = 0; i < 9; i++) { rd.position.set(17 + i * 1.6, 0.25, -6); rd.scale.set(0.7, 0.5, 34); rd.updateMatrix(); rows.setMatrixAt(i, rd.matrix); }
@@ -907,7 +949,7 @@ var BUILD = {
     for (var i = 0; i < Math.round(6 * ver * left); i++) mammal(-8 + i * 5, -10 - i * 3, i % 2 ? 0xd98a2b : 0x777777, 0.9);
     birds(Math.round(14 * ver * left), 0, -8, 9, 0xe63946); birds(Math.round(8 * ver * left), 10, 6, 12, 0x2e86de);
     insects(Math.round(260 * ins * left), 0, 0, 14); insects(Math.round(160 * ins * left), -15, -15, 10, 0x9cf0ff);
-    water(26, 0, 9, 130, 0x6a7f4a); fishes(Math.round(8 * ver), 26, 0.35, 4, 3.5, false);
+    water(26, 0, 9, 130, 0x6a7f4a); fishes(Math.round(8 * ver), 26, 0.35, 4, 3.5, false, null, { x: 26, w: 9, z0: -36, z1: 36 });
     coolRoom(7, 0, 'Forschungsstation (gekühlt)', 'cool');
     if (ff > 0.12) smoke(groundRoot, -25, 2, -30, 0x555555, 6, 3);
   },
@@ -1012,10 +1054,10 @@ function ascend() {
   flyTo(s.lon, s.lat); warnText = ''; showWarn(); panelDirty = true; updateNav();
 }
 function resetAll() {
-  S.W = 1.5; S.diet = 0; S.farm = 0; S.mob = 1; S.filt = 0; S.fl = [0, 0]; S.cfc = 0; S.heat = 100; S.uv = 100; S.card = null; S.harvest = null; S.harvestText = '';
+  S.W = 1.5; S.diet = 0; S.farm = 0; S.mob = 1; S.filt = 0; S.fl = [0, 0]; S.cfc = 0; S.heat = 100; S.uv = 100; S.card = null; S.last = null; S.harvest = null; S.harvestText = '';
   GOODS.forEach(function (g) { S.buy[g[0]] = 0; }); changed();
 }
-var redFog = new THREE.Color(0xb01020), WHITE = new THREE.Color(0xffffff);
+var redFog = new THREE.Color(0xb01020), WHITE = new THREE.Color(0xffffff), toast = '', toastT = 0;
 function groundFrame(dt, now) {
   var s = SITES[S.site], px = rig.position.x, pz = rig.position.z, hx = px, hz = pz;
   var inCool = false, inUV = false;
@@ -1032,7 +1074,7 @@ function groundFrame(dt, now) {
   else if (S.uv <= 0) w = 'UV-Schild erschöpft! Station aufsuchen oder wegschweben.';
   else if (rate < 0 && S.heat < 40) w = 'Zu heiß und zu feucht – dein Hitzeschild schwindet.';
   else if (uvr < 0 && S.uv < 40) w = 'Starke UV-Strahlung – dein UV-Schild schwindet.';
-  warnText = w; showWarn();
+  toastT -= dt; warnText = w || (toastT > 0 ? toast : ''); warnKind = w ? 'warn' : 'info'; showWarn();
   var bad = S.heat <= 0 || S.uv <= 0;
   if (scene.fog) { scene.fog.color.lerp(bad ? redFog : tmpC.set(env.sky).lerp(WHITE, 0.5), Math.min(1, dt * 3)); scene.fog.density += ((bad ? Math.max(0.05, env.fog) : env.fog) - scene.fog.density) * Math.min(1, dt * 3); }
   for (var k = 0; k < anim.length; k++) anim[k](dt, now);
@@ -1130,7 +1172,7 @@ function holdAlongRay(obj) {
 }
 function release(obj, snap) {
   var g = obj.userData.grab;
-  if (snap) snap.onDrop(g); else if (g.data.cancel) g.data.cancel();
+  if (snap) { snap.onDrop(g); if (INFO[g.kind] && S.mode === 'ground') { S.last = g.kind; toast = INFO[g.kind].s; toastT = 9; } } else if (g.data.cancel) g.data.cancel();
   changed(); dirtyT = 1;
 }
 var drag = null, ndc = new THREE.Vector2(), keys = {};
