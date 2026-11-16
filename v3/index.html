@@ -646,12 +646,12 @@ function insects(n, cx, cz, r, color) {
 function fishes(n, cx, y, cz, r, dead, col, lane) {
   for (var k = 0; k < n; k++) (function (k) {
     var g = G(), a = hash(k + cx * 3) * 6.28, rad = 1.5 + hash(k * 7 + cz) * r, yy = y + (dead ? 0 : (hash(k) - 0.5) * 1.2);
-    if (has('fish')) put(g, 'fish', 0.9, 0, -0.15, 0, 0, true);
+    if (has('fish')) put(g, 'fish', 0.9, 0, -0.15, 0, Math.PI, true);
     else { add(g, 'sph', dead ? 0xe8e4d8 : (col || 0x8fb7d9), 0, 0, 0, 0.26, 0.3, 0.8); var t = add(g, 'cone', dead ? 0xe8e4d8 : (col || 0x8fb7d9), 0, 0, -0.5, 0.3, 0.3, 0.06); t.rotation.x = Math.PI / 2; }
     add(g, 'sph', 0xff9f43, 0.02, 0.02, 0.1, 0.07, 0.07, 0.07, 1, true);
     if (dead) { g.position.set(cx + Math.cos(a) * rad, yy, cz + Math.sin(a) * rad); g.rotation.z = Math.PI / 2; g.rotation.y = a; return; }
     if (lane) { var lx = lane.x + (hash(k * 2.7 + cx) - 0.5) * (lane.w - 2.2), half = (lane.z1 - lane.z0) / 2, mid = (lane.z0 + lane.z1) / 2, sp = 0.12 + hash(k + 1.3) * 0.1;
-      anim.push(function (dt) { a += dt * sp; g.position.set(lx, 0.0, mid + Math.sin(a) * half); g.rotation.y = Math.cos(a) > 0 ? 0 : Math.PI; }); return; }
+      anim.push(function (dt) { a += dt * sp; g.position.set(lx, 0.2, mid + Math.sin(a) * half); g.rotation.y = Math.cos(a) > 0 ? 0 : Math.PI; }); return; }
     anim.push(function (dt) { a += dt * 0.35; g.position.set(cx + Math.cos(a) * rad, yy, cz + Math.sin(a) * rad); g.rotation.y = -a; });
   })(k);
 }
