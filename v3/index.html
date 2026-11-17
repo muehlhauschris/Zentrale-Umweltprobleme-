@@ -739,10 +739,10 @@ function landPiece(x0, x1, z0, z1, color, grassy) {
   t.userData.pick = function (h, ph) { if (ph === 'down') teleport(h.point.x, h.point.z); }; P_ground.push(t);
 }
 /* Land mit mäanderndem, eingeschnittenem Flusslauf: ein Geländenetz (Ufer, Böschung, Flussbett), darüber der Wasserspiegel */
-var RIV = null;
+var RIV = null, GH = null;
 function riverOff(x, z) { return RIV ? Math.abs(x - RIV.cx(z)) - RIV.hw(z) : 999; }
 function groundH(x, z) {
-  if (!RIV) return 0; var o = riverOff(x, z);
+  if (GH) return GH(x, z); if (!RIV) return 0; var o = riverOff(x, z);
   if (o > 0.8) return 0; if (o > -1.0) return -RIV.depth * 0.8 * (0.8 - o) / 1.8; return -RIV.depth * (0.8 + 0.2 * Math.min(1, (-1.0 - o) / Math.max(0.5, RIV.hw(z) - 1.0)));
 }
 function river(rx, rw, color, landColor, grassy, level, wet, amp) {
@@ -773,6 +773,25 @@ function river(rx, rw, color, landColor, grassy, level, wet, amp) {
   stones.forEach(function (q, n) { d.position.set(q.x, groundH(q.x, q.z) + 0.05, q.z); d.scale.set(q.sc, q.sc * 0.55, q.sc * 0.8); d.rotation.y = n; d.updateMatrix(); sm.setMatrixAt(n, d.matrix); }); groundRoot.add(sm);
   if (wet !== false) { var wg = new THREE.BufferGeometry(); wg.setAttribute('position', new THREE.Float32BufferAttribute(wp, 3)); wg.setAttribute('uv', new THREE.Float32BufferAttribute(wuv, 2)); wg.setIndex(widx); wg.computeVertexNormals();
     var w = new THREE.Mesh(wg, waterMat(color, 0.62)); w.position.y = level === undefined ? -0.25 : level; w.renderOrder = 2; groundRoot.add(w); }
+}
+function bridge(z, w) {
+  var bx = RIV.cx(z), bw = RIV.hw(z) * 2 + 5; add(groundRoot, 'box', 0x8a8f99, bx, -0.2, z, bw, 0.4, w);
+  [-w / 2 + 0.1, w / 2 - 0.1].forEach(function (o) { add(groundRoot, 'box', 0xb8bcc4, bx, 0.75, z + o, bw, 0.12, 0.12); add(groundRoot, 'box', 0xb8bcc4, bx, 0.4, z + o, bw, 0.08, 0.08); });
+  [-1, 1].forEach(function (o) { add(groundRoot, 'box', 0x7a7f88, bx + o * 2.2, -1.0, z, 0.8, 1.6, w - 0.4); });
+}
+/* Küste: Land/Eis bis zur Kante edge(z), davor Steilkante, Meeresgrund und Wasserspiegel */
+function coast(edge, landColor, cliffColor, bedColor, seaColor, level, depth) {
+  var N = 60, pos = [], col = [], idx = [], wp = [], wuv = [], widx = [], cs = [landColor, landColor, cliffColor, bedColor].map(function (c) { return new THREE.Color(c); });
+  for (var r = 0; r <= N; r++) { var z = -75 + 150 * r / N, e = edge(z), xs = [75, e, e - 0.5, -75], ys = [0, 0, -depth, -depth];
+    for (var k = 0; k < 4; k++) { pos.push(xs[k], ys[k], z); col.push(cs[k].r, cs[k].g, cs[k].b); }
+    wp.push(-75, 0, z, e + 0.2, 0, z); wuv.push(0, z / 7, (e + 75) / 7, z / 7);
+    if (r < N) { for (k = 0; k < 3; k++) { var a = r * 4 + k, b = a + 4; idx.push(a, a + 1, b, a + 1, b + 1, b); } widx.push(r * 2, r * 2 + 2, r * 2 + 1, r * 2 + 1, r * 2 + 2, r * 2 + 3); } }
+  var geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); geo.setIndex(idx); geo.computeVertexNormals();
+  var t = new THREE.Mesh(geo, matCache.coast || (matCache.coast = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 }))); groundRoot.add(t);
+  t.userData.pick = function (hh, phs) { if (phs === 'down') teleport(hh.point.x, hh.point.z); }; P_ground.push(t);
+  var wg = new THREE.BufferGeometry(); wg.setAttribute('position', new THREE.Float32BufferAttribute(wp, 3)); wg.setAttribute('uv', new THREE.Float32BufferAttribute(wuv, 2)); wg.setIndex(widx); wg.computeVertexNormals();
+  var w = new THREE.Mesh(wg, waterMat(seaColor, 0.78)); w.position.y = level; w.renderOrder = 2; groundRoot.add(w);
+  GH = function (x, z) { return x < edge(z) - 0.2 ? -1.5 : 0; };
 }
 function water(x, z, w, d, color, y) {
   if (d > w * 2) { add(groundRoot, 'box', 0x8a7650, x - w / 2 - 0.5, 0.06, z, 1.0, 0.12, d); add(groundRoot, 'box', 0x8a7650, x + w / 2 + 0.5, 0.06, z, 1.0, 0.12, d); }
@@ -986,19 +1005,34 @@ var BUILD = {
     for (i = 0; i < 6; i++) tree(13, -14 + i * 4.5, 'almond', 'ok', Math.round(6 * ins), 1.3);
     /* Verkehr und CO₂ */
     add(groundRoot, 'box', 0x3a3a40, 0, 0.03, -22, 120, 0.06, 5);
-    var bx = RIV.cx(-22), bw = RIV.hw(-22) * 2 + 5; add(groundRoot, 'box', 0x8a8f99, bx, -0.2, -22, bw, 0.4, 5.6); [-2.7, 2.7].forEach(function (o) { add(groundRoot, 'box', 0xb8bcc4, bx, 0.75, -22 + o, bw, 0.12, 0.12); add(groundRoot, 'box', 0xb8bcc4, bx, 0.4, -22 + o, bw, 0.08, 0.08); }); [-1, 1].forEach(function (o) { add(groundRoot, 'box', 0x7a7f88, bx + o * 2.2, -1.0, -22, 0.8, 1.6, 5.2); });
-    var v = G(), n = Math.max(1, Math.round(MOB[S.mob].g / 25)), px = -40, src = v;
-    if (S.mob === 0) { add(v, 'cyl', 0xf2f2f2, 0, 0, 0, 1.2, 9, 1.2).rotation.z = Math.PI / 2; add(v, 'box', 0xf2f2f2, 0, 0, 0, 2, 0.2, 10); }
-    else if (S.mob === 3) { for (i = 0; i < 4; i++) add(v, 'box', i ? 0xdddddd : 0xc0392b, -i * 5.2, 1.6, 0, 5, 2.6, 2.4); }
+    bridge(-22, 5.6);
+    var v = G(), n = Math.max(1, Math.round(MOB[S.mob].g / 25)), px = -40, src = v, vz = S.mob === 3 ? -27 : -22;
+    if (S.mob === 0) { /* Verkehrsflugzeug */
+      add(v, 'cyl', 0xf4f6f8, 0, 0, 0, 1.3, 10, 1.3).rotation.z = Math.PI / 2; add(v, 'sph', 0xf4f6f8, 5, 0, 0, 2.6, 1.3, 1.3);
+      add(v, 'cone', 0xf4f6f8, -6.4, 0.12, 0, 1.3, 2.8, 1.3).rotation.z = Math.PI / 2; add(v, 'box', 0x25364d, 1.2, 0.22, 0, 7.2, 0.16, 1.33);
+      [-1, 1].forEach(function (o) { add(v, 'box', 0xe4e8ee, -0.9, -0.3, o * 3.3, 2.0, 0.14, 6.2).rotation.y = o * 0.42; add(v, 'cyl', 0x8a94a3, 0.4, -0.75, o * 2.3, 0.6, 1.5, 0.6).rotation.z = Math.PI / 2;
+        add(v, 'box', 0xe4e8ee, -6.6, 0.3, o * 1.3, 1.0, 0.1, 2.4).rotation.y = o * 0.42; });
+      add(v, 'box', 0xc0392b, -6.5, 1.25, 0, 1.5, 2.0, 0.14).rotation.z = 0.35; }
+    else if (S.mob === 3) { /* Fernzug auf eigenem Gleis */
+      add(groundRoot, 'box', 0x8c8478, 0, 0.04, vz, 120, 0.08, 3.2); add(groundRoot, 'box', 0x4a4d55, 0, 0.12, vz - 0.72, 120, 0.1, 0.1); add(groundRoot, 'box', 0x4a4d55, 0, 0.12, vz + 0.72, 120, 0.1, 0.1); bridge(vz, 3.6);
+      for (i = 0; i < 4; i++) { var cxx = -i * 5.3; add(v, 'box', i ? 0xeef0f3 : 0xc0392b, cxx, 1.75, 0, 5, 2.3, 2.3); add(v, 'box', 0x1f2a3a, cxx, 2.2, 0, 4.3, 0.7, 2.34); add(v, 'box', 0x30333a, cxx, 0.42, 0, 4.4, 0.5, 1.7); }
+      add(v, 'sph', 0xc0392b, 2.5, 1.45, 0, 2.6, 1.7, 2.3); add(v, 'box', 0x4a4d55, -8, 3.4, 0, 2.2, 0.08, 0.08).rotation.z = 0.5; }
     else if (has('sedan')) { put(v, S.mob === 1 ? 'sedan' : 'hatchback', 4.2, 0, 0, 0, Math.PI / 2, true); shadow(v, 0, 0, 1.6); }
     else { add(v, 'box', S.mob === 1 ? 0xc0392b : 0x2e86de, 0, 0.8, 0, 3.6, 1.0, 1.7); add(v, 'box', 0x222222, 0, 1.5, 0, 2, 0.7, 1.5); }
-    anim.push(function (dt) { px += dt * (S.mob === 0 ? 14 : 7); if (px > 45) px = -45; v.position.set(px, S.mob === 0 ? 26 : 0, -22); });
+    anim.push(function (dt) { px += dt * (S.mob === 0 ? 14 : S.mob === 3 ? 10 : 7); if (px > 45) px = -45; v.position.set(px, S.mob === 0 ? 26 : 0, vz); });
     if (S.mob >= 2) { factory(-12, -54, false); var ll = label(['Kraftwerk'], 3, 0.5, { bg: 'rgba(13,21,40,0.92)' }); ll.position.set(-12, 11.5, -54); groundRoot.add(ll); src = null; }
-    for (i = 0; i < n; i++) (function (i) {
-      var m = add(groundRoot, 'sph', 0x2b2f38, 0, -5, 0, 0.5, 0.5, 0.5, 0.75), t = i / n, sx = 0, sy = 0;
-      anim.push(function (dt) { t += dt * 0.25; if (t > 1) { t -= 1; sx = src ? v.position.x - 2 : -12; sy = src ? v.position.y + 0.6 : 10; }
-        m.position.set(sx - t * 2, sy + t * 12, src ? -22 : -54); m.scale.setScalar(0.4 + t * 0.9); });
-    })(i);
+    /* CO₂ als Moleküle: ein Kohlenstoffatom (dunkel), zwei Sauerstoffatome (rot) – wie im Orbit */
+    var mC = new THREE.InstancedMesh(GEO.sph, mat(0x2b2f38), n), mO = new THREE.InstancedMesh(GEO.sph, mat(0xe63946), 2 * n), md = new THREE.Object3D(), ms = [];
+    mC.frustumCulled = mO.frustumCulled = false; groundRoot.add(mC); groundRoot.add(mO);
+    for (i = 0; i < n; i++) ms.push({ t: i / n, x: 0, y: -9, z: 0, a: hash(i) * 6.28 });
+    anim.push(function (dt) {
+      ms.forEach(function (m, k) { m.t += dt * 0.22; m.a += dt * 0.8;
+        if (m.t > 1) { m.t -= 1; m.x = src ? v.position.x - (S.mob === 0 ? 6 : 2) : -12; m.y = src ? v.position.y + 0.5 : 10; m.z = (src ? vz : -54) + (hash(k * 3.3) - 0.5) * 1.5; }
+        var x = m.x - m.t * 3, y = m.y + m.t * 11, cs = Math.cos(m.a) * 0.36, sn = Math.sin(m.a) * 0.36;
+        md.position.set(x, y, m.z); md.scale.setScalar(0.42); md.updateMatrix(); mC.setMatrixAt(k, md.matrix);
+        md.scale.setScalar(0.36); md.position.set(x + cs, y + sn, m.z); md.updateMatrix(); mO.setMatrixAt(2 * k, md.matrix);
+        md.position.set(x - cs, y - sn, m.z); md.updateMatrix(); mO.setMatrixAt(2 * k + 1, md.matrix); });
+      mC.instanceMatrix.needsUpdate = true; mO.instanceMatrix.needsUpdate = true; });
     ring(14, 30, 60, function (x, z, h1) { if (Math.abs(x) > 14 || z < -30) tree(x, z, 'broad', h1 < fireFrac() * 0.5 ? 'burnt' : 'ok', 0, 1.4); });
   },
   indus: function () {
@@ -1060,15 +1094,20 @@ var BUILD = {
     insects(40, 0, 0, 16, 0xff9f43);
   },
   antarctica: function () {
-    env = { sky: 0xa9d2f5, fog: 0.003 }; terrain(0xcfdfee);
+    env = { sky: 0xa9d2f5, fog: 0.003 };
+    var edge = function (z) { return -17 + 3 * Math.sin(z / 13) + 1.2 * Math.sin(z / 4.7); };
+    coast(edge, 0xdfeaf5, 0x9cc6e6, 0x2c4660, 0x1f5f9a, -0.9, 6);
+    var floes = new THREE.InstancedMesh(GEO.cyl, mat(0xf2f7fc), 16), fd = new THREE.Object3D();
+    for (var f = 0; f < 16; f++) { var fz = (hash(f * 2.3) - 0.5) * 110, fs = 2 + hash(f + 9) * 4; fd.position.set(edge(fz) - 4 - hash(f * 5.1) * 34, -0.8, fz); fd.scale.set(fs, 0.35, fs * (0.6 + hash(f + 3) * 0.5)); fd.rotation.y = f; fd.updateMatrix(); floes.setMatrixAt(f, fd.matrix); }
+    groundRoot.add(floes);
+    [[-44, -30, 16], [-52, 22, 11]].forEach(function (b) { tint(put(groundRoot, 'formation-large-rock', b[2], b[0], -1.2, b[1], b[2]), 0xe9f4ff); });
     var hs = holeScale();
-    ring(Math.round(16 * (1 - dryFrac() * 0.6)), 14, 60, function (x, z, h1, h2) { if (!tint(put(groundRoot, 'formation-large-rock', 6 + h1 * 9, x, 0, z, h2 * 6.28), 0xe6f2ff)) add(groundRoot, 'cone', 0xdcefff, x, 3 + h1 * 4, z, 6 + h2 * 8, 6 + h1 * 8, 6 + h2 * 8); });
+    ring(Math.round(16 * (1 - dryFrac() * 0.6)), 14, 60, function (x, z, h1, h2) { if (x < edge(z) + 8) return; if (!tint(put(groundRoot, 'formation-large-rock', 6 + h1 * 9, x, 0, z, h2 * 6.28), 0xe6f2ff)) add(groundRoot, 'cone', 0xdcefff, x, 3 + h1 * 4, z, 6 + h2 * 8, 6 + h1 * 8, 6 + h2 * 8); });
     for (var i = 0; i < Math.round(16 * remain('vert')); i++) { var px = -10 + hash(i) * 20, pz = -12 + hash(i + 5) * 10; add(groundRoot, 'sph', 0x1a1a1a, px, 0.45, pz, 0.42, 0.9, 0.42); add(groundRoot, 'sph', 0xffffff, px, 0.4, pz + 0.1, 0.3, 0.66, 0.3); add(groundRoot, 'sph', 0x1a1a1a, px, 0.92, pz, 0.26); add(groundRoot, 'cone', 0xf4a261, px, 0.9, pz + 0.16, 0.08, 0.16, 0.08).rotation.x = Math.PI / 2; }
     coolRoom(8, 0, 'Station (UV-Schutz)', 'uv');
     var lay = new THREE.Mesh(new THREE.RingGeometry(55 * hs, 300, 48), mat(0x4da6ff, 0.45, true)); lay.rotation.x = Math.PI / 2; lay.position.y = 70; groundRoot.add(lay);
     var hole = new THREE.Mesh(new THREE.CircleGeometry(55 * hs, 48), mat(0xb060ff, 0.4, true)); hole.rotation.x = Math.PI / 2; hole.position.y = 70.2; groundRoot.add(hole);
     add(groundRoot, 'sph', 0xfff4c2, 30, 30, -90, 10, 10, 10, 1, true);
-    water(-30, 0, 30, 120, 0x2a6fb0);
   },
   california: function () {
     var wi = waterIdx(), w = Weff(); env = { sky: mix(0x9fc9ee, 0xd9c9a8, (w - 1) / 4), fog: 0.004 + 0.004 * fireFrac() * 5 }; river(-30, 6, 0x3a8fd0, mix(0xa9a45c, 0xc2a36a, wi / 1.4), false, -0.25 - 1.3 * clamp((wi - 0.46) * 0.9 + (w - 1.5) * 0.2, 0, 1), true, 5);
@@ -1082,7 +1121,7 @@ var BUILD = {
     if (fireFrac() > 0.15) smoke(groundRoot, 40, 8, -45, 0x666666, 6, 4);
   },
   gulf: function () {
-    var e = eutro(); env = { sky: 0xa9cdee, fog: 0.005 }; landPiece(-75, 75, -4, 75, 0x6f9a5a, true);
+    var e = eutro(); env = { sky: 0xa9cdee, fog: 0.005 }; landPiece(-75, 75, -4, 75, 0x6f9a5a, true); GH = function (x, z) { return z < -4.5 ? -1.5 : 0; };
     add(groundRoot, 'box', 0x9a8f6a, 0, -2.7, -40, 150, 0.1, 72); add(groundRoot, 'box', 0x8a7650, 0, -1.35, -4.2, 150, 2.7, 0.4);
     waterSurface(0, -40, 150, 72, mix(0x1f6fb5, 0x2f6a5a, e * 0.45), -0.22, 0.7);
     add(groundRoot, 'disc', 0x4f9a2a, -14, -0.16, -18, 20 + 40 * e, 1, 12 + 20 * e, 0.8, true);
@@ -1101,7 +1140,7 @@ var BUILD = {
 function buildSite() {
   while (groundRoot.children.length) groundRoot.remove(groundRoot.children[0]);
   P_ground.length = 0; anim.length = 0; zones.length = 0; mixers.length = 0; T_ground.length = 0; targets.length = 0; mouseHeld = null; ctrls.forEach(function (o) { o.held = null; });
-  RIV = null; var s = SITES[S.site]; BUILD[s.kind]();
+  RIV = null; GH = null; var s = SITES[S.site]; BUILD[s.kind]();
   var sign = label([s.name], 4.2, 0.6, { bg: 'rgba(13,21,40,0.92)', border: '#2ec4b6' }); sign.position.set(0, 3.2, 2.5); groundRoot.add(sign);
   if (s.kind !== 'reef') skyDome(env.sky);
   scene.background = new THREE.Color(env.sky); scene.fog = new THREE.FogExp2(new THREE.Color(env.sky).lerp(new THREE.Color(0xffffff), 0.5).getHex(), env.fog);
@@ -1368,7 +1407,7 @@ function frame() {
   renderer.render(scene, camera);
 }
 drawPlanet(); drawPanel(); updateNav(); onResize(); planet.rotation.set(tilt, spin, 0);
-window.__sim = { renderer: renderer, rig: rig, camera: camera, T_orbit: T_orbit, irs: irs, targets: targets, release: release, S: S, land: land, ascend: ascend, changed: changed, P_ground: P_ground, P_orbit: P_orbit, panel: panel, startHarvest: startHarvest, resetAll: resetAll, SITES: SITES };
+window.__sim = { groundRoot: groundRoot, setAlt: function (a) { alt = a; }, renderer: renderer, rig: rig, camera: camera, T_orbit: T_orbit, irs: irs, targets: targets, release: release, S: S, land: land, ascend: ascend, changed: changed, P_ground: P_ground, P_orbit: P_orbit, panel: panel, startHarvest: startHarvest, resetAll: resetAll, SITES: SITES };
 renderer.setAnimationLoop(frame);
 };
 if (!window.THREE) { document.getElementById('err').hidden = false; document.getElementById('load').hidden = true; }
