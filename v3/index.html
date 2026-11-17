@@ -66,7 +66,8 @@
   </ul>
   <h3>3 Landnutzung, 4 Süßwasser, 5 Stoffkreisläufe – der Teller</h3>
   <ul>
-    <li>Scarborough et al. 2023 (Nature Food): Vegane Ernährung verursacht gegenüber viel Fleisch 25,1 % der Landnutzung, 46,4 % des Wasserverbrauchs, 27,0 % der Überdüngung und 34,3 % der Wirkung auf die Biodiversität. <span class="ill">„Wenig Fleisch“ ist der Mittelwert der beiden Eckwerte.</span></li>
+    <li>Scarborough et al. 2023 (Nature Food): Vegane Ernährung verursacht gegenüber viel Fleisch 25,1 % der Landnutzung, 46,4 % des Wasserverbrauchs, 27,0 % der Überdüngung und 34,3 % der Wirkung auf die Biodiversität. <span class="ill">„Wenig Fleisch“ ist der Mittelwert der beiden Eckwerte.</span> Zuhause stehen dafür acht Parzellen: viel Fleisch braucht alle acht als Acker, wenig Fleisch fünf, pflanzlich zwei.</li>
+    <li class="ill">Falter und Vögel auf den Parzellen: vier Falter je Wiesenparzelle, einer je Ackerparzelle (Bio 1,3), jeweils mal Insektenbestand bei der gewählten Erwärmung. Das Verhältnis Wiese zu Acker ist eine Darstellungsannahme; belegt ist nur die Richtung.</li>
     <li>Süßwasser: Kontinente verlieren Wasser, vier Groß-Trockenregionen der Nordhalbkugel (Chandanpurkar et al. 2025, Science Advances). <span class="ill">Die Lage der vier Regionen auf dem Globus ist grob eingezeichnet; Brunnentiefe und Wirkung von Avocado, Mandeln und Jeans sind Darstellung.</span></li>
     <li>Stickstoff: 165 statt 62 Mio. t pro Jahr, Phosphor 18,2 statt 6,2 (Planetary Health Check 2025). <span class="ill">Zahl der Düngerfabriken und Größe der Todeszonen sind Darstellung.</span></li>
     <li class="ill">Gerodeter Anteil des Regenwalds (17 % plus Teller-Anteil) und Wüstenausbreitung im Sahel sind Darstellung.</li>
@@ -635,7 +636,24 @@ function birds(n, cx, cz, h, color) {
     anim.push(function (dt, now) { a += dt * sp; g.position.set(cx + Math.cos(a) * r, h + Math.sin(now / 600 + k) * 0.6 + k * 0.3, cz + Math.sin(a) * r); g.rotation.y = -a; });
   })(k);
 }
-function insects(n, cx, cz, r, color) {
+var WSH = new THREE.Shape(); WSH.moveTo(0, -0.03); WSH.lineTo(0, 0.1); WSH.quadraticCurveTo(0.12, 0.26, 0.25, 0.17); WSH.quadraticCurveTo(0.23, 0.05, 0.1, 0.02); WSH.quadraticCurveTo(0.2, -0.06, 0.14, -0.15); WSH.quadraticCurveTo(0.04, -0.17, 0, -0.03);
+var WING = new THREE.ShapeGeometry(WSH, 5); WING.rotateX(-Math.PI / 2);
+/* Insekten als Schmetterlinge: n = Punkte der alten Darstellung (je 7 ein Falter) oder mit exact die genaue Zahl */
+function insects(n, cx, cz, r, color, exact, box) {
+  var m = exact ? Math.round(n) : Math.min(36, Math.ceil(n / 7)); if (n < 1 || m < 1) return;
+  var cols = color ? [color, 0xffffff] : [0xff8a3d, 0x5b8def], L = [];
+  for (var k = 0; k < m; k++) { var a = hash(k + cx) * 6.28, d = Math.sqrt(hash(k * 5 + cz)) * r;
+    L.push({ x: box ? box.x0 + hash(k * 3.1 + cx) * (box.x1 - box.x0) : cx + Math.cos(a) * d, z: box ? box.z0 + hash(k * 4.7 + cz) * (box.z1 - box.z0) : cz + Math.sin(a) * d, y: 0.7 + hash(k * 9) * 1.3, p: hash(k * 2.2) * 6.28, s: 0.5 + hash(k * 1.7) * 0.5 }); }
+  var wm = [0, 1].map(function (c) { var cnt = L.filter(function (q, k) { return k % 2 === c; }).length * 2; if (!cnt) return null;
+    var im = new THREE.InstancedMesh(WING, matCache['wing' + cols[c]] || (matCache['wing' + cols[c]] = new THREE.MeshBasicMaterial({ color: cols[c], side: THREE.DoubleSide })), cnt); im.frustumCulled = false; groundRoot.add(im); return im; });
+  var d3 = new THREE.Object3D(); d3.rotation.order = 'YXZ';
+  anim.push(function (dt, now) { var t = now / 1000, ix = [0, 0];
+    L.forEach(function (q, k) { var c = k % 2, im = wm[c], ph = t * q.s + q.p, x = q.x + Math.sin(ph) * 1.6 + Math.sin(ph * 2.3) * 0.5, z = q.z + Math.cos(ph * 0.8) * 1.6, y = q.y + Math.sin(ph * 1.7) * 0.35, yaw = Math.atan2(Math.cos(ph), -Math.sin(ph * 0.8) * 0.8), fl = 0.2 + 0.9 * Math.abs(Math.sin(t * 9 + q.p));
+      d3.position.set(x, y, z); d3.scale.set(1, 1, 1); d3.rotation.set(0, yaw, fl); d3.updateMatrix(); im.setMatrixAt(ix[c]++, d3.matrix);
+      d3.scale.set(-1, 1, 1); d3.rotation.set(0, yaw, -fl); d3.updateMatrix(); im.setMatrixAt(ix[c]++, d3.matrix); });
+    wm.forEach(function (im) { if (im) im.instanceMatrix.needsUpdate = true; }); });
+}
+function specks(n, cx, cz, r, color) {
   if (n < 1) return;
   var pts = [];
   for (var k = 0; k < n; k++) { var a = hash(k + cx) * 6.28, d = Math.sqrt(hash(k * 5 + cz)) * r; pts.push(Math.cos(a) * d, 0.3 + hash(k * 9) * 1.8, Math.sin(a) * d); }
@@ -863,7 +881,7 @@ function toy(g, k) {
 
 /* ================================================================== Reisebildschirm am Ort „Zuhause" */
 var INFO = {
-  plate: { t: 'Dein Teller wirkt nicht hier, sondern dort:', s: 'Dein Teller wirkt am Amazonas und am Golf von Mexiko – reise hin.', d: [[2, 'Amazonas', 'Wald weicht Weide und Futteranbau'], [7, 'Golf von Mexiko', 'Düngerfabriken, Algen, tote Fische'], [6, 'Kalifornien', 'der Grundwasserstand'], [-1, 'Orbit', 'Rodung und Fabriken von oben']] },
+  plate: { t: 'Dein Teller wirkt hier und in der Ferne:', s: 'Sieh nach rechts: So viel Acker braucht dein Teller. Die Folgen in der Ferne: Amazonas, Golf von Mexiko.', d: [[null, 'Felder rechts neben dem Platz', 'Acker oder Wiese: Parzellen, Falter und Vögel zählen'], [2, 'Amazonas', 'Wald weicht Weide und Futteranbau'], [7, 'Golf von Mexiko', 'Düngerfabriken, Algen, tote Fische'], [6, 'Kalifornien', 'der Grundwasserstand'] ] },
   crate: { t: 'Deine Wahl am Markt wirkt gleich nebenan:', s: 'Sieh dir das Feld rechts von dir an: Traktor, Insekten, Vögel.', d: [[null, 'Feld rechts neben dem Platz', 'Traktor, Insekten, Vögel, Früchte an den Bäumen']] },
   good: { t: 'Dein Einkauf wirkt dort:', s: 'Dein Einkauf wirkt in Kalifornien und im Sahel – und in deinem Körper.', d: [[6, 'Kalifornien', 'Brunnen und Kanal'], [3, 'Sahel', 'der Dorfbrunnen'], [null, 'Figur „Dein Körper“ links', 'neue leuchtende Punkte']] },
   toy: { t: 'Deine Fahrt wirkt dort:', s: 'Deine Fahrt wirkt im Orbit und am Great Barrier Reef – reise hin.', d: [[-1, 'Orbit', 'die CO₂-Spur von zu Hause in Luft und Meer'], [4, 'Great Barrier Reef', 'Kohlensäure sinkt ins Riff']] },
@@ -993,15 +1011,29 @@ var BUILD = {
     if (S.card) scr.scale.setScalar(0.8); scr.position.set(-1.4, 2.2, 0.3); b.add(scr);
     /* Fluss */
     fishes(Math.round(2 + 6 * (1 - e)), -34, -1.0, 2, 3.5, false, null, { x: -34, w: 9, z0: -18, z1: 30 });
-    /* Feld, Traktor, Obstbäume */
-    var rows = new THREE.InstancedMesh(GEO.box, mat(0x4f9a3a), 9), rd = new THREE.Object3D();
-    for (i = 0; i < 9; i++) { rd.position.set(17 + i * 1.6, 0.25, -6); rd.scale.set(0.7, 0.5, 34); rd.updateMatrix(); rows.setMatrixAt(i, rd.matrix); }
-    groundRoot.add(rows);
-    if (!S.farm) { var tr = G(); if (!put(tr, 'tractor', 2.6, 0, 0, 0, 0)) { add(tr, 'box', 0xc0392b, 0, 1.1, 0, 1.6, 1.4, 2.6); add(tr, 'box', 0x333333, 0, 0.5, 0, 2.0, 1.0, 1.0); } add(tr, 'box', 0x999999, 0, 0.9, -1.8, 7, 0.1, 0.2);
-      var sp = []; for (i = 0; i < 80; i++) sp.push((hash(i) - 0.5) * 7, hash(i + 3) * 0.9, -1.8 - hash(i + 6) * 1.5);
+    /* Acht Parzellen: so viele davon braucht der Teller als Acker (Scarborough 2023), der Rest wird Wiese und Gehölz */
+    var NP = 8, nf = Math.max(1, Math.round(NP * DIET[S.diet].land)), nw = NP - nf, pxs = function (k) { return 18 + k * 4.2; }, ffac = S.farm ? 1.3 : 1;
+    var soil = new THREE.InstancedMesh(GEO.box, mat(0x7a5a3a), nf), rows = new THREE.InstancedMesh(GEO.box, mat(S.farm ? 0x5aa544 : 0x4f9a3a), nf * 2), rd = new THREE.Object3D();
+    for (i = 0; i < nf; i++) { rd.position.set(pxs(i), 0.02, -4); rd.scale.set(3.8, 0.05, 30); rd.updateMatrix(); soil.setMatrixAt(i, rd.matrix);
+      for (var r2 = 0; r2 < 2; r2++) { rd.position.set(pxs(i) + (r2 - 0.5) * 1.8, 0.25, -4); rd.scale.set(0.8, 0.5, 29); rd.updateMatrix(); rows.setMatrixAt(i * 2 + r2, rd.matrix); } }
+    groundRoot.add(soil); groundRoot.add(rows);
+    var posts = new THREE.InstancedMesh(GEO.box, mat(0x8a6f4a), (NP + 1) * 2);
+    for (i = 0; i <= NP; i++) [-19.2, 11.2].forEach(function (pz, e2) { rd.position.set(pxs(i) - 2.1, 0.5, pz); rd.scale.set(0.16, 1.0, 0.16); rd.updateMatrix(); posts.setMatrixAt(i * 2 + e2, rd.matrix); });
+    groundRoot.add(posts);
+    if (nw) { var fl1 = new THREE.InstancedMesh(GEO.sph, mat(0xf06595), nw * 24), fl2 = new THREE.InstancedMesh(GEO.sph, mat(0xffffff), nw * 24);
+      for (i = 0; i < nw * 24; i++) { var wk = nf + Math.floor(i / 24); [fl1, fl2].forEach(function (fm, c) { rd.position.set(pxs(wk) + (hash(i * 3.3 + c) - 0.5) * 3.6, 0.22, -4 + (hash(i * 7.1 + c * 5) - 0.5) * 29); rd.position.y = 0.16; rd.scale.set(0.13, 0.13, 0.13); rd.updateMatrix(); fm.setMatrixAt(i, rd.matrix); }); }
+      groundRoot.add(fl1); groundRoot.add(fl2);
+      for (i = 0; i < nw; i++) tree(pxs(nf + i) + (i % 2 ? 0.8 : -0.8), -14 + ((i * 7) % 5) * 5, 'broad', 'ok', 0, 0.75 + (i % 3) * 0.15);
+      var wl = label(['Frei: Wiese und Gehölz'], 6.5, 0.9, { bg: 'rgba(13,21,40,0.92)', border: '#7bd389' }); wl.position.set((pxs(nf) + pxs(NP - 1)) / 2, 3.2, 11.5); wl.lookAt(wl.position.x - 20, 3.2, 31.5); groundRoot.add(wl); }
+    var al = label(['Acker für dein Essen'], 6, 0.9, { bg: 'rgba(13,21,40,0.92)', border: '#f4a261' }); al.position.set((pxs(0) + pxs(nf - 1)) / 2, nf > 5 ? 3.2 : 4.6, 11.5); al.lookAt(al.position.x - 20, al.position.y, 31.5); groundRoot.add(al);
+    if (!S.farm) { var tr = G(); if (!put(tr, 'tractor', 2.6, 0, 0, 0, 0)) { add(tr, 'box', 0xc0392b, 0, 1.1, 0, 1.6, 1.4, 2.6); add(tr, 'box', 0x333333, 0, 0.5, 0, 2.0, 1.0, 1.0); } add(tr, 'box', 0x999999, 0, 0.9, -1.8, 3.6, 0.1, 0.2);
+      var sp = []; for (i = 0; i < 80; i++) sp.push((hash(i) - 0.5) * 3.6, hash(i + 3) * 0.9, -1.8 - hash(i + 6) * 1.5);
       var sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute(sp, 3)); tr.add(new THREE.Points(sg, new THREE.PointsMaterial({ color: 0xffffff, size: 0.1 })));
-      var tz = -20; anim.push(function (dt) { tz += dt * 2.2; if (tz > 10) tz = -22; tr.position.set(23, 0, tz); }); }
-    insects(Math.round(160 * ins), 23, -6, 9); birds(Math.round(8 * ver), 22, -6, 7, 0x333333);
+      var tz = -18; anim.push(function (dt) { tz += dt * 2.2; if (tz > 9) tz = -18; tr.position.set(pxs(0), 0, tz); }); }
+    /* Falter: je Wiesenparzelle 4, je Ackerparzelle 1 (Bio 1,3) – mal Insektenbestand bei dieser Erwärmung */
+    insects(nf * ffac * remain('ins'), 0, 0, 0, null, true, { x0: pxs(0) - 1.6, x1: pxs(nf - 1) + 1.6, z0: -17, z1: 9 });
+    if (nw) insects(nw * 4 * remain('ins'), 1, 1, 0, null, true, { x0: pxs(nf) - 1.6, x1: pxs(NP - 1) + 1.6, z0: -17, z1: 9 });
+    birds(Math.round((2 * ffac + nw) * remain('vert')), (pxs(nf > 6 ? 3 : nf) + pxs(NP - 1)) / 2, -4, 7, 0x333333);
     for (i = 0; i < 6; i++) tree(13, -14 + i * 4.5, 'almond', 'ok', Math.round(6 * ins), 1.3);
     /* Verkehr und CO₂ */
     add(groundRoot, 'box', 0x3a3a40, 0, 0.03, -22, 120, 0.06, 5);
@@ -1033,7 +1065,7 @@ var BUILD = {
         md.scale.setScalar(0.36); md.position.set(x + cs, y + sn, m.z); md.updateMatrix(); mO.setMatrixAt(2 * k, md.matrix);
         md.position.set(x - cs, y - sn, m.z); md.updateMatrix(); mO.setMatrixAt(2 * k + 1, md.matrix); });
       mC.instanceMatrix.needsUpdate = true; mO.instanceMatrix.needsUpdate = true; });
-    ring(14, 30, 60, function (x, z, h1) { if (Math.abs(x) > 14 || z < -30) tree(x, z, 'broad', h1 < fireFrac() * 0.5 ? 'burnt' : 'ok', 0, 1.4); });
+    ring(14, 30, 60, function (x, z, h1) { if ((Math.abs(x) > 14 || z < -30) && !(x > 15 && x < 51 && z > -21 && z < 13)) tree(x, z, 'broad', h1 < fireFrac() * 0.5 ? 'burnt' : 'ok', 0, 1.4); });
   },
   indus: function () {
     var hz = haze(); env = { sky: mix(0x9fc4e8, 0xb8ad98, hz), fog: 0.006 + 0.05 * hz }; river(40, 10, 0x5f8fa0, 0xcdb98c, false);
@@ -1091,7 +1123,7 @@ var BUILD = {
     var n = Math.round(MOB[S.mob].g / 12) + Math.round(6 * (Weff() - 1));
     for (var i = 0; i < n; i++) (function (i) { var m = add(groundRoot, 'sph', 0x9cff3a, 0, 0, 0, 0.22, 0.22, 0.22, 0.9, true), t = hash(i), x = (hash(i + 4) - 0.5) * 30, z = (hash(i + 8) - 0.5) * 30;
       anim.push(function (dt) { t += dt * 0.07; if (t > 1) t -= 1; m.position.set(x, 13.5 - t * 13, z); }); })(i);
-    insects(40, 0, 0, 16, 0xff9f43);
+    specks(40, 0, 0, 16, 0xff9f43);
   },
   antarctica: function () {
     env = { sky: 0xa9d2f5, fog: 0.003 };
