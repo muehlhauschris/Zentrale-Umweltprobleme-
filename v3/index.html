@@ -56,7 +56,7 @@
     <li>Feuchtkugeltemperatur: theoretische Obergrenze 35 °C (Sherwood &amp; Huber 2010); im Labor lag die Grenze junger, gesunder Erwachsener bei etwa 31 °C (Vecellio et al. 2022). Jacobabad (Pakistan) erreichte 2022 einen Höchstwert von 33,6 °C.</li>
     <li class="ill">Spitzenwerte je Ort bei +1,2 °C (Industal 33, Golfküste 30, Sahel 29,5, Amazonas 29, Mitteleuropa und Kalifornien 24 °C) und der Anstieg um 0,8–1 °C je Grad Erwärmung sind gerundete Annahmen. Die Entleerungsdauer des Schilds (etwa 60 s bei 31 °C, 15 s bei 35 °C) ist Spielzeit, keine Physiologie.</li>
     <li>Energieungleichgewicht der Erde: Mitte der 2000er rund 0,6 W/m², in den letzten Jahren rund 1,3 W/m² (Mauritsen et al. 2025, CERES-Satelliten). <span class="ill">Der Anteil zurückgehaltener Infrarot-Punkte im Orbit ist Darstellung.</span></li>
-    <li>Regler: 1,5 °C, 2,8 °C und 4 °C sind als Marken gesetzt.</li>
+    <li>Regler: von 1,5 °C (etwa der heutige Stand; 2025 lag bei +1,47 °C laut Copernicus) bis 4,5 °C, Marken bei 2,8 °C und 4 °C. Werte unter dem heutigen Stand sind nicht einstellbar, weil sie nicht mehr erreichbar sind.</li>
   </ul>
   <h3>2 Biosphäre</h3>
   <ul>
@@ -522,11 +522,11 @@ function drawPanel() {
   c.fillStyle = '#ffffff'; c.font = 'bold 44px ' + FONT; c.fillText(ground ? s.name : 'Im Orbit', 60, 66);
   c.fillStyle = '#9fb3dd'; c.font = 'bold 24px ' + FONT; c.fillText('ERWÄRMUNG', 60, 130);
   c.fillStyle = '#ffffff'; c.font = 'bold 54px ' + FONT; c.textAlign = 'right'; c.fillText('+' + de(S.W, 1) + ' °C', 940, 136);
-  var hx = SL.x0 + (S.W - 1) / 3.5 * (SL.x1 - SL.x0);
+  var hx = SL.x0 + (S.W - 1.5) / 3 * (SL.x1 - SL.x0);
   c.fillStyle = '#16244a'; rr(c, SL.x0, SL.y - 10, SL.x1 - SL.x0, 20, 10); c.fill();
   c.fillStyle = '#ff8c61'; rr(c, SL.x0, SL.y - 10, Math.max(20, hx - SL.x0), 20, 10); c.fill();
   c.textAlign = 'center'; c.fillStyle = '#9fb3dd'; c.font = '24px ' + FONT;
-  [1.5, 2.8, 4].forEach(function (v) { var x = SL.x0 + (v - 1) / 3.5 * (SL.x1 - SL.x0); c.fillRect(x - 2, SL.y + 14, 4, 12); c.fillText(de(v, 1), x, SL.y + 56); });
+  [[1.5, 'heute'], [2.8, '2,8'], [4, '4,0']].forEach(function (t) { var x = SL.x0 + (t[0] - 1.5) / 3 * (SL.x1 - SL.x0); c.fillRect(x - 2, SL.y + 14, 4, 12); c.fillText(t[1], Math.max(x, SL.x0 + 30), SL.y + 56); });
   c.beginPath(); c.arc(hx, SL.y, 30, 0, Math.PI * 2); c.fillStyle = '#ffffff'; c.fill(); c.strokeStyle = '#2ec4b6'; c.lineWidth = 7; c.stroke();
   c.textAlign = 'left';
   if (S.filt) { c.fillStyle = '#f4a261'; c.font = '24px ' + FONT; c.fillText('Saubere Luft: +' + de(0.4 * S.filt / 2, 1) + ' °C  →  wirksam +' + de(Weff(), 1) + ' °C', 60, 310); }
@@ -541,7 +541,7 @@ function drawPanel() {
   if (st) wrap(c, st, KW / 2, 700, 900, 32);
   c.textAlign = 'left'; panTex.needsUpdate = true;
 }
-function setW(x) { var v = Math.round((1 + clamp((x - SL.x0) / (SL.x1 - SL.x0), 0, 1) * 3.5) * 10) / 10; if (v !== S.W) { S.W = v; changed(); } }
+function setW(x) { var v = Math.round((1.5 + clamp((x - SL.x0) / (SL.x1 - SL.x0), 0, 1) * 3) * 10) / 10; if (v !== S.W) { S.W = v; changed(); } }
 panel.userData.drag = true;
 panel.userData.pick = function (h, ph) {
   if (!h.uv) return;
@@ -651,7 +651,7 @@ function fishes(n, cx, y, cz, r, dead, col, lane) {
     add(g, 'sph', 0xff9f43, 0.02, 0.02, 0.1, 0.07, 0.07, 0.07, 1, true);
     if (dead) { g.position.set(cx + Math.cos(a) * rad, yy, cz + Math.sin(a) * rad); g.rotation.z = Math.PI / 2; g.rotation.y = a; return; }
     if (lane) { var lx = lane.x + (hash(k * 2.7 + cx) - 0.5) * (lane.w - 2.2), half = (lane.z1 - lane.z0) / 2, mid = (lane.z0 + lane.z1) / 2, sp = 0.12 + hash(k + 1.3) * 0.1;
-      anim.push(function (dt) { a += dt * sp; g.position.set(lx, 0.2, mid + Math.sin(a) * half); g.rotation.y = Math.cos(a) > 0 ? 0 : Math.PI; }); return; }
+      anim.push(function (dt) { a += dt * sp; g.position.set(lx, y + (hash(k * 4.4) - 0.5) * 0.5, mid + Math.sin(a) * half); g.rotation.y = Math.cos(a) > 0 ? 0 : Math.PI; }); return; }
     anim.push(function (dt) { a += dt * 0.35; g.position.set(cx + Math.cos(a) * rad, yy, cz + Math.sin(a) * rad); g.rotation.y = -a; });
   })(k);
 }
@@ -709,6 +709,42 @@ function board(title, lines, color) {
     boardCache[key] = texFrom(c);
   }
   return new THREE.Mesh(new THREE.PlaneGeometry(2.6, 1.7), new THREE.MeshBasicMaterial({ map: boardCache[key] }));
+}
+var waterTex = null;
+function waterMat(color, opacity) {
+  if (!waterTex) {
+    var c = makeCanvas(256, 256), g = c.getContext('2d'); g.fillStyle = '#ffffff'; g.fillRect(0, 0, 256, 256);
+    for (var k = 0; k < 220; k++) { g.fillStyle = k % 2 ? 'rgba(0,45,90,0.16)' : 'rgba(255,255,255,0.55)'; g.beginPath(); g.ellipse(hash(k) * 256, hash(k + 300) * 256, 10 + hash(k + 7) * 22, 1.5 + hash(k + 9) * 2.5, 0, 0, 6.3); g.fill(); }
+    waterTex = texFrom(c); waterTex.wrapS = waterTex.wrapT = THREE.RepeatWrapping;
+  }
+  var key = 'w' + color + '/' + opacity;
+  return matCache[key] || (matCache[key] = new THREE.MeshStandardMaterial({ color: color, map: waterTex, transparent: true, opacity: opacity, roughness: 0.2, depthWrite: false }));
+}
+function flat(w, d, tile) {
+  var geo = new THREE.PlaneGeometry(w, d); geo.rotateX(-Math.PI / 2);
+  var uv = geo.attributes.uv; for (var i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * w / tile, uv.getY(i) * d / tile);
+  return geo;
+}
+function waterSurface(x, z, w, d, color, y, opacity) {
+  var m = new THREE.Mesh(flat(w, d, 7), waterMat(color, opacity === undefined ? 0.62 : opacity)); m.position.set(x, y, z); m.renderOrder = 2; groundRoot.add(m); return m;
+}
+function landPiece(x0, x1, z0, z1, color, grassy) {
+  var w = x1 - x0, d = z1 - z0, m;
+  if (grassy && AS.tex.grass) {
+    var key = 'grass1' + color; m = matCache[key];
+    if (!m) { var tx = AS.tex.grass.clone(); tx.needsUpdate = true; tx.wrapS = tx.wrapT = THREE.RepeatWrapping; tx.encoding = THREE.sRGBEncoding; tx.anisotropy = maxAniso;
+      m = matCache[key] = new THREE.MeshStandardMaterial({ map: tx, color: new THREE.Color(color).lerp(new THREE.Color(0xffffff), 0.55), roughness: 1 }); }
+  } else m = mat(color);
+  var t = new THREE.Mesh(flat(w, d, 4.2), m); t.position.set((x0 + x1) / 2, 0, (z0 + z1) / 2); groundRoot.add(t);
+  t.userData.pick = function (h, ph) { if (ph === 'down') teleport(h.point.x, h.point.z); }; P_ground.push(t);
+}
+/* Land mit eingeschnittenem Flusslauf: Böschung, Flussbett, Wasserspiegel (level < 0), darunter die Fische */
+function river(rx, rw, color, landColor, grassy, level, wet) {
+  landPiece(-75, rx - rw / 2, -75, 75, landColor, grassy); landPiece(rx + rw / 2, 75, -75, 75, landColor, grassy);
+  add(groundRoot, 'box', 0x6f5d40, rx, -1.75, 0, rw + 0.4, 0.1, 150);
+  add(groundRoot, 'box', 0x7d6846, rx - rw / 2 - 0.1, -0.87, 0, 0.3, 1.76, 150); add(groundRoot, 'box', 0x7d6846, rx + rw / 2 + 0.1, -0.87, 0, 0.3, 1.76, 150);
+  for (var k = 0; k < 16; k++) add(groundRoot, 'sph', 0x8d8b84, rx + (hash(k * 1.9 + rx) - 0.5) * (rw - 1), -1.66, (hash(k * 3.7 + rx) - 0.5) * 120, 0.5 + hash(k) * 0.9, 0.35, 0.5 + hash(k + 2) * 0.7);
+  if (wet !== false) waterSurface(rx, 0, rw, 150, color, level === undefined ? -0.25 : level);
 }
 function water(x, z, w, d, color, y) {
   if (d > w * 2) { add(groundRoot, 'box', 0x8a7650, x - w / 2 - 0.5, 0.06, z, 1.0, 0.12, d); add(groundRoot, 'box', 0x8a7650, x + w / 2 + 0.5, 0.06, z, 1.0, 0.12, d); }
@@ -820,7 +856,7 @@ function travelScreen(x, z) {
 /* ================================================================== Die acht Orte */
 var BUILD = {
   home: function () {
-    env = { sky: 0x9cc7ee, fog: 0.003 }; terrain(0x6f9a4a, true);
+    env = { sky: 0x9cc7ee, fog: 0.003 }; river(-24, 9, mix(0x2f86d6, 0x2f8f6a, eutro() * 0.7), 0x6f9a4a, true);
     [-26, -16, -6, 16, 26, 36].forEach(function (hx, k) { var hn = ['house-3', 'house-4', 'house-5', 'house-6', 'house-7', 'house1'][k]; put(groundRoot, hn, 6.5, hx, 0, -34 - (k % 2) * 5, 0); });
     put(groundRoot, 'wind-turbine', 22, 46, 0, -52, 0.5); put(groundRoot, 'wind-turbine', 22, 58, 0, -40, 0.9);
     var ins = remain('ins') * (S.farm ? 1 : 0.77), ver = remain('vert') * (S.farm ? 1 : 0.77), e = eutro();
@@ -909,7 +945,7 @@ var BUILD = {
     var scr = S.card ? board(CARDS[S.card].t, CARDS[S.card].l, CARDS[S.card].c) : label(['Analysegerät: Punkt in die Schale legen'], 2.2, 0.3, { bg: 'rgba(13,21,40,0.92)' });
     if (S.card) scr.scale.setScalar(0.8); scr.position.set(-1.4, 2.2, 0.3); b.add(scr);
     /* Fluss */
-    water(-24, -5, 9, 90, mix(0x2f86d6, 0x2f8f6a, e * 0.7)); fishes(Math.round(2 + 6 * (1 - e)), -24, 0.35, 2, 3.5, false, null, { x: -24, w: 9, z0: -30, z1: 26 });
+    fishes(Math.round(2 + 6 * (1 - e)), -24, -0.95, 2, 3.5, false, null, { x: -24, w: 9, z0: -30, z1: 26 });
     /* Feld, Traktor, Obstbäume */
     var rows = new THREE.InstancedMesh(GEO.box, mat(0x4f9a3a), 9), rd = new THREE.Object3D();
     for (i = 0; i < 9; i++) { rd.position.set(17 + i * 1.6, 0.25, -6); rd.scale.set(0.7, 0.5, 34); rd.updateMatrix(); rows.setMatrixAt(i, rd.matrix); }
@@ -937,13 +973,12 @@ var BUILD = {
     ring(14, 30, 60, function (x, z, h1) { if (Math.abs(x) > 14 || z < -30) tree(x, z, 'broad', h1 < fireFrac() * 0.5 ? 'burnt' : 'ok', 0, 1.4); });
   },
   indus: function () {
-    var hz = haze(); env = { sky: mix(0x9fc4e8, 0xb8ad98, hz), fog: 0.006 + 0.05 * hz }; terrain(0xcdb98c);
+    var hz = haze(); env = { sky: mix(0x9fc4e8, 0xb8ad98, hz), fog: 0.006 + 0.05 * hz }; river(40, 10, 0x5f8fa0, 0xcdb98c, false);
     var HN = ['house-3', 'house-4', 'house-5', 'house-6', 'house-7', 'house1', 'building-small-a', 'building-small-b', 'building-small-c', 'building-small-d'];
     ring(26, 13, 55, function (x, z, h1, h2, k) { if (Math.abs(z - 4) < 7 || Math.hypot(x, z - 9) < 15) return; if (put(groundRoot, HN[k % HN.length], 6 + h2 * 5, x, 0, z, Math.floor(h1 * 4) * Math.PI / 2)) shadow(groundRoot, x, z, 4); else add(groundRoot, 'box', mix(0xd9cdb3, 0xb59c7a, h1), x, 2 + h2 * 4, z, 5 + h1 * 4, 4 + h2 * 8, 5 + h2 * 4); });
     [[-5, -6, 0xe63946], [3, -9, 0x2e86de], [-9, 2, 0xf4a261]].forEach(function (p) { add(groundRoot, 'box', p[2], p[0], 2.4, p[1], 3, 0.1, 2.4); add(groundRoot, 'box', 0x8a6f4a, p[0], 0.5, p[1], 2.6, 1, 1.4); });
     coolRoom(8, -3, 'Gekühlter Raum', 'cool'); factory(-20, -18, false); factory(22, -26, false);
     add(groundRoot, 'sph', mix(0xfff4c2, 0xd9c9a8, hz), 40, 55, -80, 12, 12, 12, 1, true);
-    water(40, 0, 10, 120, 0x5f8fa0);
     ring(10, 8, 30, function (x, z, h1) { tree(x, z, 'broad', h1 < dryFrac() ? 'dead' : 'ok', 0, 1.1); });
     add(groundRoot, 'box', 0x3a3a40, 0, 0.03, 4, 120, 0.06, 5);
     for (var i = 0; i < 3; i++) (function (i) { var c = put(groundRoot, ['sedan', 'suv', 'truck'][i], 4.4, 0, 0, 3 + i, Math.PI / 2, true) || add(groundRoot, 'box', [0xc0392b, 0xf1c40f, 0x2e86de][i], 0, 0.8, 3 + i, 3, 1.2, 1.5), x = -30 + i * 25;
@@ -951,7 +986,7 @@ var BUILD = {
       })(i);
   },
   amazon: function () {
-    env = { sky: 0x9fc9d6, fog: 0.012 }; terrain(0x2f6a34, true);
+    env = { sky: 0x9fc9d6, fog: 0.012 }; river(26, 9, 0x3f86a8, 0x2f6a34, true);
     var cf = clearFrac(), ff = fireFrac(), ins = remain('ins'), ver = remain('vert'), cattle = 0;
     ring(130, 7, 60, function (x, z, h1, h2, k) {
       if (h1 < cf) { add(groundRoot, 'cyl', 0x6b4a2b, x, 0.2, z, 0.7, 0.4, 0.7); add(groundRoot, 'disc', 0x9aa04e, x, 0.02, z, 7, 1, 7, 0.75, true); if (cattle < 8 && k % 6 === 0) { mammal(x + 2, z, 0x7a5a3a, 1.1); cattle++; } }
@@ -961,19 +996,18 @@ var BUILD = {
     for (var i = 0; i < Math.round(6 * ver * left); i++) mammal(-8 + i * 5, -10 - i * 3, i % 2 ? 0xd98a2b : 0x777777, 0.9);
     birds(Math.round(14 * ver * left), 0, -8, 9, 0xe63946); birds(Math.round(8 * ver * left), 10, 6, 12, 0x2e86de);
     insects(Math.round(260 * ins * left), 0, 0, 14); insects(Math.round(160 * ins * left), -15, -15, 10, 0x9cf0ff);
-    water(26, 0, 9, 130, 0x3f86a8); fishes(Math.round(8 * ver), 26, 0.35, 4, 3.5, false, null, { x: 26, w: 9, z0: -36, z1: 36 });
+    fishes(Math.round(8 * ver), 26, -0.95, 4, 3.5, false, null, { x: 26, w: 9, z0: -36, z1: 36 });
     coolRoom(7, 0, 'Forschungsstation (gekühlt)', 'cool');
     if (ff > 0.12) smoke(groundRoot, -25, 2, -30, 0x555555, 6, 3);
   },
   sahel: function () {
-    var d = dryFrac(); env = { sky: mix(0xa9cfee, 0xe0c9a0, d), fog: 0.004 + 0.012 * d }; terrain(mix(0xb9a35a, 0xdcc08a, d));
+    var d = dryFrac(); env = { sky: mix(0xa9cfee, 0xe0c9a0, d), fog: 0.004 + 0.012 * d }; river(18, 7, 0x4a8fd0, mix(0xb9a35a, 0xdcc08a, d), false, -0.3 - 1.7 * d, d < 0.75);
     ring(34, 8, 58, function (x, z, h1, h2) { tree(x, z, 'acacia', h1 < d ? 'dead' : 'ok', 0, 1 + h2 * 0.5); });
     ring(Math.round(70 * (1 - d)), 4, 45, function (x, z) { add(groundRoot, 'cone', 0x8aa04a, x, 0.25, z, 0.5, 0.5, 0.5); });
     ring(Math.round(14 * d), 25, 60, function (x, z, h1) { add(groundRoot, 'sph', 0xe3c890, x, 0, z - 20, 14 + h1 * 10, 3 + h1 * 3, 10 + h1 * 8); });
     for (var i = 0; i < Math.round(8 * (1 - d) * remain('vert')); i++) mammal(6 + i * 3, -6 - i * 2, 0xe8e0d0, 0.6);
     [[-8, -6], [-12, -2], [-10, 3], [-15, -8], [-5, -11]].forEach(function (p) { add(groundRoot, 'cyl', 0xc8a878, p[0], 1, p[1], 3, 2, 3); add(groundRoot, 'cone', 0x8a6f3a, p[0], 2.8, p[1], 3.8, 1.8, 3.8); });
     well(-3, -3, 6 + 20 * d + 4 * (waterIdx() - 0.46));
-    water(18, 0, 7, 120, mix(0x4a8fd0, 0x9a7a4a, d * 1.4), 0.03);
     birds(Math.round(6 * remain('vert') * (1 - d)), 0, 0, 10, 0x333333); insects(Math.round(80 * remain('ins') * (1 - d)), 5, 3, 10);
   },
   reef: function () {
@@ -1008,11 +1042,10 @@ var BUILD = {
     water(-30, 0, 30, 120, 0x2a6fb0);
   },
   california: function () {
-    var wi = waterIdx(), w = Weff(); env = { sky: mix(0x9fc9ee, 0xd9c9a8, (w - 1) / 4), fog: 0.004 + 0.004 * fireFrac() * 5 }; terrain(mix(0xa9a45c, 0xc2a36a, wi / 1.4));
+    var wi = waterIdx(), w = Weff(); env = { sky: mix(0x9fc9ee, 0xd9c9a8, (w - 1) / 4), fog: 0.004 + 0.004 * fireFrac() * 5 }; river(-22, 6, 0x3a8fd0, mix(0xa9a45c, 0xc2a36a, wi / 1.4), false, -0.25 - 1.3 * clamp((wi - 0.46) * 0.9 + (w - 1.5) * 0.2, 0, 1), true);
     var ins = remain('ins');
     for (var i = 0; i < 6; i++) for (var j = 0; j < 6; j++) tree(-14 + i * 5.5, -8 - j * 5.5, 'almond', 'ok', Math.round(5 * ins), 1.3);
     well(5, 3, 6 + 12 * wi + 3 * (w - 1.2));
-    water(-22, 0, clamp(6 - 3 * wi - (w - 1.2), 0.6, 6), 120, 0x3a8fd0);
     ring(Math.round(40 * clamp(wi / 1.4, 0, 1)), 3, 30, function (x, z, h1) { add(groundRoot, 'disc', 0x6a5a3a, x, 0.03, z + 14, 1 + h1 * 2, 1, 1 + h1 * 2); });
     ring(30, 40, 62, function (x, z, h1, h2) { add(groundRoot, 'sph', 0x9a8a5a, x, 0, z, 20, 8, 20); tree(x, 4, 'conifer', 'ok', 0, 1).position.set(x, 3.6, z); if (h1 < fireFrac() * 1.6) tree(x + 3, z, 'conifer', 'burnt', 0, 1.3).position.y = 3.4; });
     coolRoom(9, -1, 'Farmhaus (gekühlt)', 'cool');
@@ -1020,17 +1053,18 @@ var BUILD = {
     if (fireFrac() > 0.15) smoke(groundRoot, 40, 8, -45, 0x666666, 6, 4);
   },
   gulf: function () {
-    var e = eutro(); env = { sky: 0xa9cdee, fog: 0.005 }; terrain(0x6f9a5a, true);
-    add(groundRoot, 'box', mix(0x1f6fb5, 0x2f6a5a, e * 0.45), 0, 0.03, -56, 160, 0.06, 104); water(-14, 8, 8, 30, mix(0x2f86d6, 0x2f8f6a, e * 0.7), 0.05);
-    add(groundRoot, 'disc', 0x4f9a2a, -14, 0.07, -16, 20 + 40 * e, 1, 14 + 22 * e, 0.8, true);
-    fishes(Math.round(16 * e), -14, 0.12, -16, 7 + 10 * e, true); fishes(Math.round(12 * (1 - e)), 4, 0.3, -24, 12, false);
+    var e = eutro(); env = { sky: 0xa9cdee, fog: 0.005 }; landPiece(-75, 75, -4, 75, 0x6f9a5a, true);
+    add(groundRoot, 'box', 0x9a8f6a, 0, -2.7, -40, 150, 0.1, 72); add(groundRoot, 'box', 0x8a7650, 0, -1.35, -4.2, 150, 2.7, 0.4);
+    waterSurface(0, -40, 150, 72, mix(0x1f6fb5, 0x2f6a5a, e * 0.45), -0.22, 0.7);
+    add(groundRoot, 'disc', 0x4f9a2a, -14, -0.16, -18, 20 + 40 * e, 1, 12 + 20 * e, 0.8, true);
+    fishes(Math.round(16 * e), -14, -0.12, -18, 6 + 9 * e, true); fishes(Math.round(12 * (1 - e)), 4, -1.4, -24, 11, false);
     for (var i = 0; i < 1 + Math.round(3 * e); i++) factory(24 + i * 12, 6, true);
     var l = label(['Düngerfabrik (Haber-Bosch, Erdgas)'], 6, 0.6, { bg: 'rgba(13,21,40,0.92)' }); l.position.set(24, 11.5, 6); l.lookAt(0, 6, 9); groundRoot.add(l);
     var rows = new THREE.InstancedMesh(GEO.box, mat(0x4f9a3a), 8), rd = new THREE.Object3D();
     for (i = 0; i < 8; i++) { rd.position.set(-40 + i * 1.6, 0.25, 12); rd.scale.set(0.7, 0.5, 26); rd.updateMatrix(); rows.setMatrixAt(i, rd.matrix); }
     groundRoot.add(rows);
     coolRoom(9, 6, 'Diner (gekühlt)', 'cool');
-    if (!put(groundRoot, 'boat-small', 5, 6, 0.1, -12, 0.6, true)) add(groundRoot, 'box', 0xf2f2f2, 6, 0.6, -12, 2.4, 1.2, 6);
+    if (!put(groundRoot, 'boat-small', 5, 6, -0.5, -12, 0.6, true)) add(groundRoot, 'box', 0xf2f2f2, 6, 0.6, -12, 2.4, 1.2, 6);
     [[-22, 6], [-26, -2], [16, 12], [-6, 14]].forEach(function (p, k) { put(groundRoot, k % 2 ? 'palm-short' : 'palm-long', 6, p[0], 0, p[1], k); });
     birds(Math.round(8 * remain('vert') * (1 - 0.6 * e)), 0, -15, 8, 0xffffff); insects(Math.round(90 * remain('ins')), 10, 10, 10);
   }
@@ -1284,6 +1318,7 @@ function frame() {
   var now = performance.now(), dt = Math.min(0.05, (now - last) / 1000); last = now;
   if (dirty) { dirtyT += dt; if (dirtyT > 0.25) { dirty = false; drawPlanet(); if (S.mode === 'ground') buildSite(); panelDirty = true; } }
   for (var mi = 0; mi < mixers.length; mi++) mixers[mi].update(dt);
+  if (waterTex) waterTex.offset.y = (waterTex.offset.y + dt * 0.035) % 1;
   if (S.mode === 'orbit') orbitFrame(dt, now); else groundFrame(dt, now);
   if (Math.abs(S.heat - shownHeat) >= 1 || Math.abs(S.uv - shownUV) >= 1) panelDirty = true;
   panelT += dt;
