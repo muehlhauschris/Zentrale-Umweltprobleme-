@@ -650,8 +650,8 @@ function fishes(n, cx, y, cz, r, dead, col, lane) {
     else { add(g, 'sph', dead ? 0xe8e4d8 : (col || 0x8fb7d9), 0, 0, 0, 0.26, 0.3, 0.8); var t = add(g, 'cone', dead ? 0xe8e4d8 : (col || 0x8fb7d9), 0, 0, -0.5, 0.3, 0.3, 0.06); t.rotation.x = Math.PI / 2; }
     add(g, 'sph', 0xff9f43, 0.02, 0.02, 0.1, 0.07, 0.07, 0.07, 1, true);
     if (dead) { g.position.set(cx + Math.cos(a) * rad, yy, cz + Math.sin(a) * rad); g.rotation.z = Math.PI / 2; g.rotation.y = a; return; }
-    if (lane) { var lx = lane.x + (hash(k * 2.7 + cx) - 0.5) * (lane.w - 2.2), half = (lane.z1 - lane.z0) / 2, mid = (lane.z0 + lane.z1) / 2, sp = 0.12 + hash(k + 1.3) * 0.1;
-      anim.push(function (dt) { a += dt * sp; g.position.set(lx, y + (hash(k * 4.4) - 0.5) * 0.5, mid + Math.sin(a) * half); g.rotation.y = Math.cos(a) > 0 ? 0 : Math.PI; }); return; }
+    if (lane) { var lx = lane.x + (hash(k * 2.7 + cx) - 0.5) * (lane.w - 3.4), half = (lane.z1 - lane.z0) / 2, mid = (lane.z0 + lane.z1) / 2, sp = 0.12 + hash(k + 1.3) * 0.1;
+      var lo = lx - lane.x; anim.push(function (dt) { a += dt * sp; var fz = mid + Math.sin(a) * half, fx = RIV ? RIV.cx(fz) + lo * RIV.hw(fz) / (lane.w / 2) : lx, dir = Math.cos(a) > 0 ? 1 : -1, sl = RIV ? (RIV.cx(fz + 0.5) - RIV.cx(fz - 0.5)) : 0; g.position.set(fx, y + (hash(k * 4.4) - 0.5) * 0.4, fz); g.rotation.y = Math.atan2(sl * dir, dir); }); return; }
     anim.push(function (dt) { a += dt * 0.35; g.position.set(cx + Math.cos(a) * rad, yy, cz + Math.sin(a) * rad); g.rotation.y = -a; });
   })(k);
 }
@@ -738,20 +738,48 @@ function landPiece(x0, x1, z0, z1, color, grassy) {
   var t = new THREE.Mesh(flat(w, d, 4.2), m); t.position.set((x0 + x1) / 2, 0, (z0 + z1) / 2); groundRoot.add(t);
   t.userData.pick = function (h, ph) { if (ph === 'down') teleport(h.point.x, h.point.z); }; P_ground.push(t);
 }
-/* Land mit eingeschnittenem Flusslauf: Böschung, Flussbett, Wasserspiegel (level < 0), darunter die Fische */
-function river(rx, rw, color, landColor, grassy, level, wet) {
-  landPiece(-75, rx - rw / 2, -75, 75, landColor, grassy); landPiece(rx + rw / 2, 75, -75, 75, landColor, grassy);
-  add(groundRoot, 'box', 0x6f5d40, rx, -1.75, 0, rw + 0.4, 0.1, 150);
-  add(groundRoot, 'box', 0x7d6846, rx - rw / 2 - 0.1, -0.87, 0, 0.3, 1.76, 150); add(groundRoot, 'box', 0x7d6846, rx + rw / 2 + 0.1, -0.87, 0, 0.3, 1.76, 150);
-  for (var k = 0; k < 16; k++) add(groundRoot, 'sph', 0x8d8b84, rx + (hash(k * 1.9 + rx) - 0.5) * (rw - 1), -1.66, (hash(k * 3.7 + rx) - 0.5) * 120, 0.5 + hash(k) * 0.9, 0.35, 0.5 + hash(k + 2) * 0.7);
-  if (wet !== false) waterSurface(rx, 0, rw, 150, color, level === undefined ? -0.25 : level);
+/* Land mit mäanderndem, eingeschnittenem Flusslauf: ein Geländenetz (Ufer, Böschung, Flussbett), darüber der Wasserspiegel */
+var RIV = null;
+function riverOff(x, z) { return RIV ? Math.abs(x - RIV.cx(z)) - RIV.hw(z) : 999; }
+function groundH(x, z) {
+  if (!RIV) return 0; var o = riverOff(x, z);
+  if (o > 0.8) return 0; if (o > -1.0) return -RIV.depth * 0.8 * (0.8 - o) / 1.8; return -RIV.depth * (0.8 + 0.2 * Math.min(1, (-1.0 - o) / Math.max(0.5, RIV.hw(z) - 1.0)));
+}
+function river(rx, rw, color, landColor, grassy, level, wet, amp) {
+  var A = amp === undefined ? 6 : amp, ph = rx * 0.37, depth = 1.6;
+  RIV = { depth: depth,
+    cx: function (z) { return rx + A * (Math.sin(z / 17 + ph) + 0.35 * Math.sin(z / 6.5 + 2 * ph)); },
+    hw: function (z) { return rw / 2 * (1 + 0.22 * Math.sin(z / 11 + ph * 3)); } };
+  var cLand = new THREE.Color(landColor); if (grassy && AS.tex.grass) cLand.lerp(new THREE.Color(0xffffff), 0.55);
+  var cBank = new THREE.Color(grassy ? 0xb9a47a : 0xa8906a), cBed = new THREE.Color(0x6a583c);
+  var N = 120, pos = [], col = [], uv = [], idx = [], wp = [], wuv = [], widx = [], M = 9;
+  for (var r = 0; r <= N; r++) {
+    var z = -75 + 150 * r / N, c = RIV.cx(z), h = RIV.hw(z);
+    var xs = [-75, c - h - 3.2, c - h - 0.8, c - h + 1.0, c, c + h - 1.0, c + h + 0.8, c + h + 3.2, 75];
+    var ys = [0, 0, 0, -depth * 0.8, -depth, -depth * 0.8, 0, 0, 0], cs = [cLand, cLand, cBank, cBed, cBed, cBed, cBank, cLand, cLand];
+    for (var k = 0; k < M; k++) { pos.push(xs[k], ys[k], z); col.push(cs[k].r, cs[k].g, cs[k].b); uv.push(xs[k] / 4.2, z / 4.2); }
+    wp.push(c - h - 0.7, 0, z, c + h + 0.7, 0, z); wuv.push(0, z / 7, (2 * h + 1.4) / 7, z / 7);
+    if (r < N) { for (k = 0; k < M - 1; k++) { var a = r * M + k, b = a + M; idx.push(a, b, a + 1, a + 1, b, b + 1); } widx.push(r * 2, r * 2 + 2, r * 2 + 1, r * 2 + 1, r * 2 + 2, r * 2 + 3); }
+  }
+  var geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); geo.setIndex(idx); geo.computeVertexNormals();
+  var key = 'riv' + (grassy ? 1 : 0), m = matCache[key];
+  if (!m) { m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 });
+    if (grassy && AS.tex.grass) { var tx = AS.tex.grass.clone(); tx.needsUpdate = true; tx.wrapS = tx.wrapT = THREE.RepeatWrapping; tx.encoding = THREE.sRGBEncoding; tx.anisotropy = maxAniso; m.map = tx; }
+    matCache[key] = m; }
+  var t = new THREE.Mesh(geo, m); groundRoot.add(t);
+  t.userData.pick = function (hh, phs) { if (phs === 'down') teleport(hh.point.x, hh.point.z); }; P_ground.push(t);
+  var stones = []; for (var s = 0; s < 22; s++) { var sz = (hash(s * 3.7 + rx) - 0.5) * 110, so = (hash(s * 1.9 + rx) - 0.5) * 2; stones.push({ x: RIV.cx(sz) + so * (RIV.hw(sz) + 0.4), z: sz, sc: 0.5 + hash(s) * 0.9, on: Math.abs(so) > 0.7 }); }
+  var sm = new THREE.InstancedMesh(GEO.sph, mat(0x8d8b84), stones.length), d = new THREE.Object3D();
+  stones.forEach(function (q, n) { d.position.set(q.x, groundH(q.x, q.z) + 0.05, q.z); d.scale.set(q.sc, q.sc * 0.55, q.sc * 0.8); d.rotation.y = n; d.updateMatrix(); sm.setMatrixAt(n, d.matrix); }); groundRoot.add(sm);
+  if (wet !== false) { var wg = new THREE.BufferGeometry(); wg.setAttribute('position', new THREE.Float32BufferAttribute(wp, 3)); wg.setAttribute('uv', new THREE.Float32BufferAttribute(wuv, 2)); wg.setIndex(widx); wg.computeVertexNormals();
+    var w = new THREE.Mesh(wg, waterMat(color, 0.62)); w.position.y = level === undefined ? -0.25 : level; w.renderOrder = 2; groundRoot.add(w); }
 }
 function water(x, z, w, d, color, y) {
   if (d > w * 2) { add(groundRoot, 'box', 0x8a7650, x - w / 2 - 0.5, 0.06, z, 1.0, 0.12, d); add(groundRoot, 'box', 0x8a7650, x + w / 2 + 0.5, 0.06, z, 1.0, 0.12, d); }
   return add(groundRoot, 'box', color, x, y === undefined ? 0.04 : y, z, w, 0.06, d);
 }
 function mix(a, b, t) { return new THREE.Color(a).lerp(new THREE.Color(b), clamp(t, 0, 1)).getHex(); }
-function ring(n, r0, r1, fn) { for (var k = 0; k < n; k++) { var a = hash(k * 3.1 + r0) * 6.28, r = r0 + hash(k * 7.7 + r1) * (r1 - r0); if (Math.hypot(Math.cos(a) * r, Math.sin(a) * r - 9) < 6.5) continue; fn(Math.cos(a) * r, Math.sin(a) * r, hash(k + 0.5), hash(k + 77.7), k); } }
+function ring(n, r0, r1, fn) { for (var k = 0; k < n; k++) { var a = hash(k * 3.1 + r0) * 6.28, r = r0 + hash(k * 7.7 + r1) * (r1 - r0); if (Math.hypot(Math.cos(a) * r, Math.sin(a) * r - 9) < 6.5 || riverOff(Math.cos(a) * r, Math.sin(a) * r) < 5) continue; fn(Math.cos(a) * r, Math.sin(a) * r, hash(k + 0.5), hash(k + 77.7), k); } }
 
 
 /* ================================================================== Greifen: Gegenstände, Ablagen, Möbel */
@@ -856,8 +884,8 @@ function travelScreen(x, z) {
 /* ================================================================== Die acht Orte */
 var BUILD = {
   home: function () {
-    env = { sky: 0x9cc7ee, fog: 0.003 }; river(-24, 9, mix(0x2f86d6, 0x2f8f6a, eutro() * 0.7), 0x6f9a4a, true);
-    [-26, -16, -6, 16, 26, 36].forEach(function (hx, k) { var hn = ['house-3', 'house-4', 'house-5', 'house-6', 'house-7', 'house1'][k]; put(groundRoot, hn, 6.5, hx, 0, -34 - (k % 2) * 5, 0); });
+    env = { sky: 0x9cc7ee, fog: 0.003 }; river(-34, 9, mix(0x2f86d6, 0x2f8f6a, eutro() * 0.7), 0x6f9a4a, true);
+    [-14, -4, 16, 26, 36, 46].forEach(function (hx, k) { var hn = ['house-3', 'house-4', 'house-5', 'house-6', 'house-7', 'house1'][k]; put(groundRoot, hn, 6.5, hx, 0, -34 - (k % 2) * 5, 0); });
     put(groundRoot, 'wind-turbine', 22, 46, 0, -52, 0.5); put(groundRoot, 'wind-turbine', 22, 58, 0, -40, 0.9);
     var ins = remain('ins') * (S.farm ? 1 : 0.77), ver = remain('vert') * (S.farm ? 1 : 0.77), e = eutro();
     var xs = [-10, -6, -2, 2, 6, 10], zz = function (x) { return -5 + 0.06 * x * x; }, T, q, i;
@@ -945,7 +973,7 @@ var BUILD = {
     var scr = S.card ? board(CARDS[S.card].t, CARDS[S.card].l, CARDS[S.card].c) : label(['Analysegerät: Punkt in die Schale legen'], 2.2, 0.3, { bg: 'rgba(13,21,40,0.92)' });
     if (S.card) scr.scale.setScalar(0.8); scr.position.set(-1.4, 2.2, 0.3); b.add(scr);
     /* Fluss */
-    fishes(Math.round(2 + 6 * (1 - e)), -24, -0.95, 2, 3.5, false, null, { x: -24, w: 9, z0: -30, z1: 26 });
+    fishes(Math.round(2 + 6 * (1 - e)), -34, -1.0, 2, 3.5, false, null, { x: -34, w: 9, z0: -18, z1: 30 });
     /* Feld, Traktor, Obstbäume */
     var rows = new THREE.InstancedMesh(GEO.box, mat(0x4f9a3a), 9), rd = new THREE.Object3D();
     for (i = 0; i < 9; i++) { rd.position.set(17 + i * 1.6, 0.25, -6); rd.scale.set(0.7, 0.5, 34); rd.updateMatrix(); rows.setMatrixAt(i, rd.matrix); }
@@ -958,24 +986,25 @@ var BUILD = {
     for (i = 0; i < 6; i++) tree(13, -14 + i * 4.5, 'almond', 'ok', Math.round(6 * ins), 1.3);
     /* Verkehr und CO₂ */
     add(groundRoot, 'box', 0x3a3a40, 0, 0.03, -22, 120, 0.06, 5);
+    var bx = RIV.cx(-22), bw = RIV.hw(-22) * 2 + 5; add(groundRoot, 'box', 0x8a8f99, bx, -0.2, -22, bw, 0.4, 5.6); [-2.7, 2.7].forEach(function (o) { add(groundRoot, 'box', 0xb8bcc4, bx, 0.75, -22 + o, bw, 0.12, 0.12); add(groundRoot, 'box', 0xb8bcc4, bx, 0.4, -22 + o, bw, 0.08, 0.08); }); [-1, 1].forEach(function (o) { add(groundRoot, 'box', 0x7a7f88, bx + o * 2.2, -1.0, -22, 0.8, 1.6, 5.2); });
     var v = G(), n = Math.max(1, Math.round(MOB[S.mob].g / 25)), px = -40, src = v;
     if (S.mob === 0) { add(v, 'cyl', 0xf2f2f2, 0, 0, 0, 1.2, 9, 1.2).rotation.z = Math.PI / 2; add(v, 'box', 0xf2f2f2, 0, 0, 0, 2, 0.2, 10); }
     else if (S.mob === 3) { for (i = 0; i < 4; i++) add(v, 'box', i ? 0xdddddd : 0xc0392b, -i * 5.2, 1.6, 0, 5, 2.6, 2.4); }
     else if (has('sedan')) { put(v, S.mob === 1 ? 'sedan' : 'hatchback', 4.2, 0, 0, 0, Math.PI / 2, true); shadow(v, 0, 0, 1.6); }
     else { add(v, 'box', S.mob === 1 ? 0xc0392b : 0x2e86de, 0, 0.8, 0, 3.6, 1.0, 1.7); add(v, 'box', 0x222222, 0, 1.5, 0, 2, 0.7, 1.5); }
     anim.push(function (dt) { px += dt * (S.mob === 0 ? 14 : 7); if (px > 45) px = -45; v.position.set(px, S.mob === 0 ? 26 : 0, -22); });
-    if (S.mob >= 2) { factory(-34, -48, false); var ll = label(['Kraftwerk'], 3, 0.5, { bg: 'rgba(13,21,40,0.92)' }); ll.position.set(-34, 11.5, -48); groundRoot.add(ll); src = null; }
+    if (S.mob >= 2) { factory(-12, -54, false); var ll = label(['Kraftwerk'], 3, 0.5, { bg: 'rgba(13,21,40,0.92)' }); ll.position.set(-12, 11.5, -54); groundRoot.add(ll); src = null; }
     for (i = 0; i < n; i++) (function (i) {
       var m = add(groundRoot, 'sph', 0x2b2f38, 0, -5, 0, 0.5, 0.5, 0.5, 0.75), t = i / n, sx = 0, sy = 0;
-      anim.push(function (dt) { t += dt * 0.25; if (t > 1) { t -= 1; sx = src ? v.position.x - 2 : -34; sy = src ? v.position.y + 0.6 : 10; }
-        m.position.set(sx - t * 2, sy + t * 12, src ? -22 : -48); m.scale.setScalar(0.4 + t * 0.9); });
+      anim.push(function (dt) { t += dt * 0.25; if (t > 1) { t -= 1; sx = src ? v.position.x - 2 : -12; sy = src ? v.position.y + 0.6 : 10; }
+        m.position.set(sx - t * 2, sy + t * 12, src ? -22 : -54); m.scale.setScalar(0.4 + t * 0.9); });
     })(i);
     ring(14, 30, 60, function (x, z, h1) { if (Math.abs(x) > 14 || z < -30) tree(x, z, 'broad', h1 < fireFrac() * 0.5 ? 'burnt' : 'ok', 0, 1.4); });
   },
   indus: function () {
     var hz = haze(); env = { sky: mix(0x9fc4e8, 0xb8ad98, hz), fog: 0.006 + 0.05 * hz }; river(40, 10, 0x5f8fa0, 0xcdb98c, false);
     var HN = ['house-3', 'house-4', 'house-5', 'house-6', 'house-7', 'house1', 'building-small-a', 'building-small-b', 'building-small-c', 'building-small-d'];
-    ring(26, 13, 55, function (x, z, h1, h2, k) { if (Math.abs(z - 4) < 7 || Math.hypot(x, z - 9) < 15) return; if (put(groundRoot, HN[k % HN.length], 6 + h2 * 5, x, 0, z, Math.floor(h1 * 4) * Math.PI / 2)) shadow(groundRoot, x, z, 4); else add(groundRoot, 'box', mix(0xd9cdb3, 0xb59c7a, h1), x, 2 + h2 * 4, z, 5 + h1 * 4, 4 + h2 * 8, 5 + h2 * 4); });
+    ring(26, 13, 55, function (x, z, h1, h2, k) { if (Math.abs(z - 4) < 7 || Math.hypot(x, z - 9) < 15 || riverOff(x, z) < 9) return; if (put(groundRoot, HN[k % HN.length], 6 + h2 * 5, x, 0, z, Math.floor(h1 * 4) * Math.PI / 2)) shadow(groundRoot, x, z, 4); else add(groundRoot, 'box', mix(0xd9cdb3, 0xb59c7a, h1), x, 2 + h2 * 4, z, 5 + h1 * 4, 4 + h2 * 8, 5 + h2 * 4); });
     [[-5, -6, 0xe63946], [3, -9, 0x2e86de], [-9, 2, 0xf4a261]].forEach(function (p) { add(groundRoot, 'box', p[2], p[0], 2.4, p[1], 3, 0.1, 2.4); add(groundRoot, 'box', 0x8a6f4a, p[0], 0.5, p[1], 2.6, 1, 1.4); });
     coolRoom(8, -3, 'Gekühlter Raum', 'cool'); factory(-20, -18, false); factory(22, -26, false);
     add(groundRoot, 'sph', mix(0xfff4c2, 0xd9c9a8, hz), 40, 55, -80, 12, 12, 12, 1, true);
@@ -996,16 +1025,16 @@ var BUILD = {
     for (var i = 0; i < Math.round(6 * ver * left); i++) mammal(-8 + i * 5, -10 - i * 3, i % 2 ? 0xd98a2b : 0x777777, 0.9);
     birds(Math.round(14 * ver * left), 0, -8, 9, 0xe63946); birds(Math.round(8 * ver * left), 10, 6, 12, 0x2e86de);
     insects(Math.round(260 * ins * left), 0, 0, 14); insects(Math.round(160 * ins * left), -15, -15, 10, 0x9cf0ff);
-    fishes(Math.round(8 * ver), 26, -0.95, 4, 3.5, false, null, { x: 26, w: 9, z0: -36, z1: 36 });
+    fishes(Math.round(8 * ver), 26, -1.0, 4, 3.5, false, null, { x: 26, w: 9, z0: -36, z1: 36 });
     coolRoom(7, 0, 'Forschungsstation (gekühlt)', 'cool');
     if (ff > 0.12) smoke(groundRoot, -25, 2, -30, 0x555555, 6, 3);
   },
   sahel: function () {
-    var d = dryFrac(); env = { sky: mix(0xa9cfee, 0xe0c9a0, d), fog: 0.004 + 0.012 * d }; river(18, 7, 0x4a8fd0, mix(0xb9a35a, 0xdcc08a, d), false, -0.3 - 1.7 * d, d < 0.75);
+    var d = dryFrac(); env = { sky: mix(0xa9cfee, 0xe0c9a0, d), fog: 0.004 + 0.012 * d }; river(26, 7, 0x4a8fd0, mix(0xb9a35a, 0xdcc08a, d), false, -0.3 - 1.5 * d, d < 0.75, 4);
     ring(34, 8, 58, function (x, z, h1, h2) { tree(x, z, 'acacia', h1 < d ? 'dead' : 'ok', 0, 1 + h2 * 0.5); });
     ring(Math.round(70 * (1 - d)), 4, 45, function (x, z) { add(groundRoot, 'cone', 0x8aa04a, x, 0.25, z, 0.5, 0.5, 0.5); });
-    ring(Math.round(14 * d), 25, 60, function (x, z, h1) { add(groundRoot, 'sph', 0xe3c890, x, 0, z - 20, 14 + h1 * 10, 3 + h1 * 3, 10 + h1 * 8); });
-    for (var i = 0; i < Math.round(8 * (1 - d) * remain('vert')); i++) mammal(6 + i * 3, -6 - i * 2, 0xe8e0d0, 0.6);
+    ring(Math.round(14 * d), 25, 60, function (x, z, h1) { if (riverOff(x, z - 20) < 12) return; add(groundRoot, 'sph', 0xe3c890, x, 0, z - 20, 14 + h1 * 10, 3 + h1 * 3, 10 + h1 * 8); });
+    for (var i = 0; i < Math.round(8 * (1 - d) * remain('vert')); i++) mammal(3 + i * 1.5, -6 - i * 2, 0xe8e0d0, 0.6);
     [[-8, -6], [-12, -2], [-10, 3], [-15, -8], [-5, -11]].forEach(function (p) { add(groundRoot, 'cyl', 0xc8a878, p[0], 1, p[1], 3, 2, 3); add(groundRoot, 'cone', 0x8a6f3a, p[0], 2.8, p[1], 3.8, 1.8, 3.8); });
     well(-3, -3, 6 + 20 * d + 4 * (waterIdx() - 0.46));
     birds(Math.round(6 * remain('vert') * (1 - d)), 0, 0, 10, 0x333333); insects(Math.round(80 * remain('ins') * (1 - d)), 5, 3, 10);
@@ -1042,12 +1071,12 @@ var BUILD = {
     water(-30, 0, 30, 120, 0x2a6fb0);
   },
   california: function () {
-    var wi = waterIdx(), w = Weff(); env = { sky: mix(0x9fc9ee, 0xd9c9a8, (w - 1) / 4), fog: 0.004 + 0.004 * fireFrac() * 5 }; river(-22, 6, 0x3a8fd0, mix(0xa9a45c, 0xc2a36a, wi / 1.4), false, -0.25 - 1.3 * clamp((wi - 0.46) * 0.9 + (w - 1.5) * 0.2, 0, 1), true);
+    var wi = waterIdx(), w = Weff(); env = { sky: mix(0x9fc9ee, 0xd9c9a8, (w - 1) / 4), fog: 0.004 + 0.004 * fireFrac() * 5 }; river(-30, 6, 0x3a8fd0, mix(0xa9a45c, 0xc2a36a, wi / 1.4), false, -0.25 - 1.3 * clamp((wi - 0.46) * 0.9 + (w - 1.5) * 0.2, 0, 1), true, 5);
     var ins = remain('ins');
     for (var i = 0; i < 6; i++) for (var j = 0; j < 6; j++) tree(-14 + i * 5.5, -8 - j * 5.5, 'almond', 'ok', Math.round(5 * ins), 1.3);
     well(5, 3, 6 + 12 * wi + 3 * (w - 1.2));
     ring(Math.round(40 * clamp(wi / 1.4, 0, 1)), 3, 30, function (x, z, h1) { add(groundRoot, 'disc', 0x6a5a3a, x, 0.03, z + 14, 1 + h1 * 2, 1, 1 + h1 * 2); });
-    ring(30, 40, 62, function (x, z, h1, h2) { add(groundRoot, 'sph', 0x9a8a5a, x, 0, z, 20, 8, 20); tree(x, 4, 'conifer', 'ok', 0, 1).position.set(x, 3.6, z); if (h1 < fireFrac() * 1.6) tree(x + 3, z, 'conifer', 'burnt', 0, 1.3).position.y = 3.4; });
+    ring(30, 40, 62, function (x, z, h1, h2) { if (riverOff(x, z) < 17) return; add(groundRoot, 'sph', 0x9a8a5a, x, 0, z, 20, 8, 20); tree(x, 4, 'conifer', 'ok', 0, 1).position.set(x, 3.6, z); if (h1 < fireFrac() * 1.6) tree(x + 3, z, 'conifer', 'burnt', 0, 1.3).position.y = 3.4; });
     coolRoom(9, -1, 'Farmhaus (gekühlt)', 'cool');
     insects(Math.round(120 * ins), -3, -18, 12); birds(Math.round(6 * remain('vert')), 0, -15, 9, 0x333333);
     if (fireFrac() > 0.15) smoke(groundRoot, 40, 8, -45, 0x666666, 6, 4);
@@ -1072,7 +1101,7 @@ var BUILD = {
 function buildSite() {
   while (groundRoot.children.length) groundRoot.remove(groundRoot.children[0]);
   P_ground.length = 0; anim.length = 0; zones.length = 0; mixers.length = 0; T_ground.length = 0; targets.length = 0; mouseHeld = null; ctrls.forEach(function (o) { o.held = null; });
-  var s = SITES[S.site]; BUILD[s.kind]();
+  RIV = null; var s = SITES[S.site]; BUILD[s.kind]();
   var sign = label([s.name], 4.2, 0.6, { bg: 'rgba(13,21,40,0.92)', border: '#2ec4b6' }); sign.position.set(0, 3.2, 2.5); groundRoot.add(sign);
   if (s.kind !== 'reef') skyDome(env.sky);
   scene.background = new THREE.Color(env.sky); scene.fog = new THREE.FogExp2(new THREE.Color(env.sky).lerp(new THREE.Color(0xffffff), 0.5).getHex(), env.fog);
@@ -1147,7 +1176,7 @@ function groundFrame(dt, now) {
       rig.position.x += before.x - after.x; rig.position.z += before.z - after.z; } else if (!turnX) snapReady = true;
   }
   var r = Math.hypot(rig.position.x, rig.position.z); if (r > 62) { rig.position.x *= 62 / r; rig.position.z *= 62 / r; }
-  rig.position.y = alt;
+  rig.position.y = alt + groundH(rig.position.x, rig.position.z);
   if (alt > 70) ascend();
 }
 var snapReady = true, tmpC = new THREE.Color(), colA = new THREE.Color(0x4da6ff), colB = new THREE.Color(0xff6a3d), cIR = new THREE.Color(0xff3b30), cBack = new THREE.Color(0xffa23a);
